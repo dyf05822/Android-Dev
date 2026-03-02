@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- xml声明版本和编码 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ✅ 关键新增：添加互联网访问权限，用于接入真实天气 API -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.ScreenshotofTaskManager">
+        <!-- 应用全局配置：允许备份、设置图标、支持从右到左布局、应用主主题 -->
+
+        <!-- ✅ 关键修改点：将 activity 的主题设置为我们定义的启动页主题 Theme.App.Starting -->
+        <!-- 当应用启动时，系统会先展示这个主题中的动画 Logo，然后再切换回主主题 -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.App.Starting">
+
+            <intent-filter>
+                <!-- 设置为程序的主入口 -->
+                <action android:name="android.intent.action.MAIN" />
+                <!-- 设置为桌面启动项 -->
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

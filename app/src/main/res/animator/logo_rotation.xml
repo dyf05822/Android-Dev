@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    旋转动画配置说明：
+    1. duration: 单次动画总时长 1700ms (1s 旋转 + 0.7s 停顿)
+    2. repeatCount: infinite 代表无限循环
+    3. valueType: 角度使用浮点数计算
+    4. 关键帧逻辑：
+       - 0% 到 58.8% (即 1 秒时)：从 0 度旋转到 360 度
+       - 58.8% 到 100% (即剩下的 0.7 秒)：保持在 360 度实现停顿
+-->
+<objectAnimator xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="1700"
+    android:repeatCount="infinite"
+    android:valueType="floatType">
+
+    <propertyValuesHolder android:propertyName="rotation">
+
+        <keyframe
+            android:fraction="0.0"
+            android:value="0" />
+
+        <keyframe
+            android:fraction="0.588"
+            android:value="360"
+            android:interpolator="@android:anim/linear_interpolator" />
+
+        <keyframe
+            android:fraction="1.0"
+            android:value="360" />
+
+    </propertyValuesHolder>
+
+</objectAnimator>

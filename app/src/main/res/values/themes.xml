@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ✅ 启动页专用主题：继承自官方 SplashScreen 库 -->
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <!-- 设置启动页的背景颜色 -->
+        <item name="windowSplashScreenBackground">#FFFFFF</item>
+        <!-- 设置启动页显示的动画图标 -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/logo_animated</item>
+        <!-- 设置动画持续时间 -->
+        <item name="windowSplashScreenAnimationDuration">1000</item>
+        <!-- 启动页结束后切换回的主主题 -->
+        <item name="postSplashScreenTheme">@style/Theme.ScreenshotofTaskManager</item>
+    </style>
+
+    <!-- ✅ 修复后的主主题：使用 AppCompat 基础主题以保证资源链接成功 -->
+    <style name="Theme.ScreenshotofTaskManager" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <!-- 保持与 Compose 主题一致的颜色属性 -->
+        <item name="colorPrimary">#6200EE</item>
+    </style>
+</resources>

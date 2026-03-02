@@ -1,0 +1,262 @@
+package com.example.screenshotoftaskmanager.ui
+
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material3.Badge
+import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
+
+@OptIn(ExperimentalMaterial3Api::class) // 标记此函数使用了实验性的 Material3 API
+@Composable // 声明这是一个 Jetpack Compose 的可组合函数
+fun ConversationListScreen(navController: NavController) { // 定义会话列表屏幕，接收一个 NavController 用于导航
+
+    // ✅ 给明确类型，避免 items() 推断 T 失败
+    // 使用 remember 记住排序后的会话列表，只有当会话数量或置顶状态变化时才重新计算
+    val sortedConversations: List<Conversation> = remember(       //使用remember函数 计算出key值判断状态是否改变
+        DataSource.conversations.size, // 会话列表的大小
+        DataSource.conversations.map { it.isPinned } // 每个会话的置顶状态  状态改变从而key2改变
+    ) {
+        DataSource.conversations.sortedWith(compareByDescending { it.isPinned }) // 按置顶状态降序排序 sortedwith是排序函数接受一个比较器来进行自定义排序
+    }
+
+    Scaffold( // 使用 Material3 的 Scaffold 脚手架布局
+        topBar = { // 定义顶部应用栏
+            TopAppBar( // 使用 TopAppBar 组件
+                title = { Text("消息") }, // 设置标题为“消息”
+                actions = { // 定义右侧的操作按钮
+                    IconButton(onClick = { // 添加一个图标按钮
+                        var newFriendNumber = 1 // 初始化新朋友的编号
+                        var newFriendName = "新朋友" // 初始化新朋友的默认名称
+                        while (DataSource.conversations.any { it.name == newFriendName }) { // 循环检查名称是否已存在
+                            newFriendNumber++ // 如果存在，编号加一
+                            newFriendName = "新朋友 $newFriendNumber" // 更新名称
+                        }
+                        DataSource.getMessagesForConversation(newFriendName) // 为新朋友创建一个会话（如果需要）
+                        navController.navigate("conversation_detail/$newFriendName") // 导航到新朋友的会话详情页 根据传入路由地址来跳转到会话详情页
+                    }) {
+                        Icon(Icons.Default.Add, contentDescription = "添加新会话") // 设置按钮图标为“添加”，并提供内容描述
+                    }
+                }
+            )
+        }
+    ) { innerPadding -> // Scaffold 的内容区域，innerPadding 用于处理 TopAppBar 遮挡
+        LazyColumn( // 使用 LazyColumn 创建一个垂直滚动的列表   懒加载 只有进入可视区域后才可以渲染
+            modifier = Modifier
+                .fillMaxSize() // 填充整个可用空间
+                .padding(innerPadding) // 应用内边距，避免内容被 TopAppBar 遮挡
+        ) {
+            items( // 定义列表项
+                items = sortedConversations, // 列表的数据源是排序后的会话列表
+                key = { it.name } // 为每个列表项设置一个唯一的 key，提高性能和稳定性
+            ) { conversation -> // 遍历每个会话数据
+                ConversationListItem( // 为每个会话创建一个列表项 UI
+                    conversation = conversation, // 传入会话数据
+                    onClick = { // 定义点击事件
+                        navController.navigate("conversation_detail/${conversation.name}") // 点击后导航到对应的会话详情页
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable // 声明这是一个 Jetpack Compose 的可组合函数
+fun ConversationListItem( // 定义单个会话列表项的 UI
+    conversation: Conversation, // 接收会话数据 是函数的参数
+    onClick: () -> Unit // 接收点击事件的回调 定义了一个点击事件的回调函数
+) {
+    val scope = rememberCoroutineScope() // 获取一个协程作用域，用于启动协程加载会话相关数据/动画等操作
+    val density = LocalDensity.current // 获取当前的屏幕密度，用于 dp 和 px 之间的转换 不同设备密度不同实现页面正确适配
+
+    // 两个按钮总宽度（置顶80 + 删除80）
+    // 使用 remember 记住计算出的像素值，避免重复计算
+    val openPx = remember(density) { with(density) { 160.dp.toPx() } } // 将 160.dp 转换为像素值  将屏幕密度转化为像素值 统一！
+
+    // ✅ 用 Animatable 自己管理横向偏移：范围 [-openPx, 0]
+    // 创建一个 Animatable 值来控制横向偏移，初始值为 0
+    val offsetX = remember { Animatable(0f) }    //实现动画效果 改变偏移值 保证动画过程中偏移值的连续性和一致性。
+
+    fun clamp(x: Float): Float = x.coerceIn(-openPx, 0f) // 定义一个clamp函数，将偏移量限制在 [-openPx, 0f] 范围内
+
+    Box( // 使用 Box 布局，允许子组件堆叠
+        modifier = Modifier
+            .fillMaxWidth() // 填充父容器的宽度
+            .padding(vertical = 4.dp) // 设置垂直方向的内边距
+    ) {
+        // 背景按钮层（在右侧） 实现会话列表交互功能
+        Row( // 使用 Row 布局将按钮水平排列
+            modifier = Modifier
+                .fillMaxHeight() // 填充父容器的高度
+                .align(Alignment.CenterEnd), // 对齐到父容器的末尾（右侧）
+            verticalAlignment = Alignment.CenterVertically // 子项在垂直方向上居中对齐
+        ) {
+            // 置顶按钮
+            IconButton( // 创建一个图标按钮
+                onClick = { // 定义点击事件
+                    conversation.isPinned = !conversation.isPinned // 切换会话的置顶状态
+                    scope.launch { // 启动一个协程
+                        offsetX.animateTo(0f, tween(180)) // 以动画方式将卡片移回原位 targetvalue动画目标值 动画规格、动画持续时间Tween 是基于时间的渐变动画，在起始值和结束值间创建平滑过渡，通过设定动画时长、延迟时间和缓动曲线来定义动画变化过程。
+                    }
+                },
+                modifier = Modifier
+                    .width(80.dp) // 设置按钮宽度为 80.dp
+                    .fillMaxHeight() // 填充父容器的高度
+                    .background(MaterialTheme.colorScheme.tertiaryContainer) // 设置背景颜色
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) { // 使用 Column 将图标和文字垂直排列
+                    Icon(Icons.Filled.PushPin, contentDescription = "置顶") // 显示置顶图标
+                    Text("置顶", fontSize = 12.sp) // 显示“置顶”文字
+                }
+            }
+
+            // 删除按钮
+            IconButton( // 创建一个图标按钮
+                onClick = { // 定义点击事件
+                    DataSource.conversations.remove(conversation) // 从数据源中删除此会话
+                },
+                modifier = Modifier
+                    .width(80.dp) // 设置按钮宽度为 80.dp
+                    .fillMaxHeight() // 填充父容器的高度
+                    .background(MaterialTheme.colorScheme.errorContainer) // 设置背景颜色
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) { // 使用 Column 将图标和文字垂直排列
+                    Icon(Icons.Filled.Delete, contentDescription = "删除") // 显示删除图标
+                    Text("删除", fontSize = 12.sp) // 显示“删除”文字
+                }
+            }
+        }
+
+        // 前景卡片层（可拖拽）
+        Card( // 使用 Card 组件作为前景
+            modifier = Modifier
+                .fillMaxWidth() // 填充父容器的宽度
+                .offset { IntOffset(offsetX.value.roundToInt(), 0) } // 根据 offsetX 的值来偏移卡片位置
+                .draggable( // 使卡片可以水平拖动
+                    orientation = Orientation.Horizontal, // 设置拖动方向为水平
+                    state = rememberDraggableState { delta -> // 记住拖动状态
+                        // delta>0 向右拖，delta<0 向左拖
+                        scope.launch { // 在协程中处理拖动
+                            offsetX.snapTo(clamp(offsetX.value + delta)) // 立即更新偏移量，并限制在范围内
+                        }
+                    },
+                    onDragStopped = { velocity -> // 拖动停止时的回调函数
+                        // ✅ 松手后自动“吸附”：超过一半就打开，否则关闭
+                        scope.launch { // 在协程中处理吸附动画
+                            // 判断是否应该打开：偏移量超过一半，或者向左的快速滑动
+                            val shouldOpen = abs(offsetX.value) > openPx * 0.5f || velocity < -800f    //偏移量大于多少 速度小于800 负数因为是负方向
+                            val target = if (shouldOpen) -openPx else 0f // 设置目标位置（完全打开或完全关闭）
+                            offsetX.animateTo(target, tween(180)) // 以动画方式移动到目标位置
+                        }
+                    }
+                )
+                .clickable { // 给卡片添加点击事件
+                    // 如果已经打开，点一下先收回；否则进入详情
+                    scope.launch { // 在协程中处理点击逻辑
+                        if (offsetX.value != 0f) offsetX.animateTo(0f, tween(160)) // 如果已侧滑，则收回
+                        else onClick() // 否则执行传入的 onClick 回调（进入详情页）
+                    }
+                }
+        ) {
+            Row( // 使用 Row 布局排列卡片内容
+                modifier = Modifier.padding(16.dp), // 设置内边距
+                verticalAlignment = Alignment.CenterVertically // 子项在垂直方向上居中对齐
+            ) {
+                Column(modifier = Modifier.weight(1f)) { // 左侧内容区域，占据剩余空间
+                    Row(verticalAlignment = Alignment.CenterVertically) { // 姓名和置顶图标行
+                        Text( // 显示会话名称
+                            text = conversation.name,
+                            fontWeight = FontWeight.Bold, // 字体加粗
+                            fontSize = 16.sp // 字体大小
+                        )
+                        if (conversation.isPinned) { // 如果会话已置顶
+                            Spacer(modifier = Modifier.width(6.dp)) // 添加一个间隔
+                            Icon( // 显示置顶图标
+                                imageVector = Icons.Filled.PushPin,
+                                contentDescription = "已置顶",
+                                modifier = Modifier.size(16.dp), // 设置图标大小
+                                tint = MaterialTheme.colorScheme.primary // 设置图标颜色
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp)) // 添加一个垂直间隔
+
+                    val summaryText = if (conversation.draft.isNotEmpty()) { // 判断是否有草稿
+                        "[草稿] ${conversation.draft}" // 如果有，显示草稿内容
+                    } else {
+                        conversation.messages.lastOrNull()?.content ?: "还没有消息" // 否则显示最后一条消息，如果没有消息则显示默认文本
+                    }
+
+                    val summaryColor = if (conversation.draft.isNotEmpty()) { // 判断是否有草稿
+                        MaterialTheme.colorScheme.error // 如果有，摘要文本颜色使用错误提示色
+                    } else {
+                        Color.Gray // 否则使用灰色
+                    }
+
+                    Text( // 显示摘要文本
+                        text = summaryText,
+                        color = summaryColor, // 设置文本颜色
+                        fontSize = 14.sp, // 设置字体大小
+                        maxLines = 1, // 最多显示一行
+                        overflow = TextOverflow.Ellipsis // 超出部分显示省略号
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(16.dp)) // 添加一个水平间隔
+
+                Column(horizontalAlignment = Alignment.End) { // 右侧时间与未读数区域
+                    Text("12:11", color = Color.Gray, fontSize = 12.sp) // 显示消息时间（这里是硬编码的）
+                    Spacer(modifier = Modifier.height(4.dp)) // 添加一个垂直间隔
+                    if (conversation.unreadCount > 0) { // 如果有未读消息
+                        Badge { Text(text = "${conversation.unreadCount}") } // 使用 Badge 显示未读消息数量
+                    }
+                }
+            }
+        }
+    }
+}
