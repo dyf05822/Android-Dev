@@ -6,6 +6,11 @@
     <!-- ✅ 关键新增：添加互联网访问权限，用于接入真实天气 API -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- ✅ 关键新增：添加 GPS 精确定位权限（通过 GPS 芯片获取，精度高） -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- ✅ 关键新增：添加网络粗略定位权限（通过基站或 WiFi 获取，速度快） -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"

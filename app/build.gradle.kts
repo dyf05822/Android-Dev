@@ -55,9 +55,13 @@ dependencies {
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.appcompat) // ✅ 真正引入 AppCompat 库，解决 themes.xml 中的解析问题
     
-    // ✅ 新增：真正引入 Retrofit 及其 Gson 解析库，用于接入真实天气 API
+    // ✅ 真正引入 Retrofit 及其 Gson 解析库，用于接入真实天气 API
     implementation(libs.retrofit)
     implementation(libs.retrofit.gson)
+
+    // ✅ 新增：引入 Google 定位服务和协程支持库
+    implementation(libs.play.services.location)
+    implementation(libs.kotlinx.coroutines.play.services)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

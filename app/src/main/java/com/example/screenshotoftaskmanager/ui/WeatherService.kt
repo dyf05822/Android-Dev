@@ -18,44 +18,84 @@ data class LiveWeather(
     val reporttime: String // 发布时间
 )
 
-// ✅ 定义 Retrofit 接口：描述我们要访问的具体路径和参数
+// ✅ 新增：定义逆地理编码（经纬度转城市码）的数据结构
+// 对应高德 API 的 JSON 层级结构
+data class GeocodeResponse(
+    val regeocode: RegeocodeData? // 返回的地理反查信息
+)
+
+data class RegeocodeData(
+    val addressComponent: AddressComponent? // 地址组件信息
+)
+
+data class AddressComponent(
+    val adcode: String? // 核心数据：城市行政区划代码（如 110000）
+)
+
+// ✅ 定义 Retrofit 接口：整合天气和逆地理编码功能
 interface WeatherApi {
-    @GET("weatherInfo") // 设置请求的相对路径
-    suspend fun getWeather( // 使用 suspend 关键字，支持在协程中异步调用
-        @Query("key") apiKey: String, // 传入你的 API 密钥
-        @Query("city") cityCode: String, // 传入城市代码（如北京是 110000）
-        @Query("extensions") extensions: String = "base" // 基础天气信息
-    ): WeatherResponse // 返回我们定义好的数据模型
+    // 1. 获取天气信息接口
+    @GET("https://restapi.amap.com/v3/weather/weatherInfo") 
+    suspend fun getWeather(
+        @Query("key") apiKey: String,
+        @Query("city") cityCode: String,
+        @Query("extensions") extensions: String = "base"
+    ): WeatherResponse
+
+    // 2. ✅ 新增：逆地理编码接口，负责将经纬度坐标转为城市代码
+    @GET("https://restapi.amap.com/v3/geocode/regeo") 
+    suspend fun getAdcode(
+        @Query("key") apiKey: String,
+        @Query("location") location: String // 参数格式要求为 "经度,纬度"
+    ): GeocodeResponse
 }
 
-// ✅ 创建网络请求的单例对象
+// ✅ 封装网络请求的 Repository 单例对象
 object WeatherRepository {
-    // 高德地图天气 API 的基地址
-    private const val BASE_URL = "https://restapi.amap.com/v3/weather/"
-    
-    // 初始化 Retrofit 实例
+    private const val BASE_URL = "https://restapi.amap.com/v3/" // 设置基础网址
+    private const val MY_KEY = "c12749063b1d0005ef59c75a4a56ee49" // 使用你提供的高德 API 密钥
+
+    // 初始化 Retrofit 实例，配置 Gson 自动解析 JSON
     private val retrofit = Retrofit.Builder()
-        .baseUrl(BASE_URL) // 设置基地址
-        .addConverterFactory(GsonConverterFactory.create()) // 设置 Gson 解析器，自动将 JSON 转为对象
+        .baseUrl(BASE_URL)
+        .addConverterFactory(GsonConverterFactory.create())
         .build()
 
-    // 创建 API 实现类
+    // 创建 API 业务类
     private val api = retrofit.create(WeatherApi::class.java)
 
-    // 封装一个简单的获取天气函数
-    // 注意：这里的 key 已经填入了你提供的真实 Key
-    suspend fun fetchWeather(cityCode: String = "110000"): String {         //此处默认的是北京的邮政编码
+    /**
+     * ✅ 新功能：根据经纬度实时查询所在城市的 adcode
+     * @param longitude 经度
+     * @param latitude 纬度
+     */
+    suspend fun getCityCodeByLocation(longitude: Double, latitude: Double): String {
         return try {
-            // 调用接口获取数据。这里已填入你提供的真实高德 API Key
-            val response = api.getWeather(apiKey = "c12749063b1d0005ef59c75a4a56ee49", cityCode = cityCode)
-            val live = response.lives.firstOrNull() // 获取返回列表中的第一个天气数据
+            val locationStr = "$longitude,$latitude" // 拼接成 API 要求的字符串
+            val response = api.getAdcode(apiKey = MY_KEY, location = locationStr)
+            // 提取返回结果中的 adcode，如果没拿到则默认返回北京代码 "110000"
+            response.regeocode?.addressComponent?.adcode ?: "110000"
+        } catch (e: Exception) {
+            "110000" // 网络异常时兜底返回北京
+        }
+    }
+
+    /**
+     * 获取指定城市的实时天气
+     * @param cityCode 城市代码（默认为北京）
+     */
+    suspend fun fetchWeather(cityCode: String = "110000"): String {
+        return try {
+            val response = api.getWeather(apiKey = MY_KEY, cityCode = cityCode)
+            val live = response.lives.firstOrNull() // 获取列表中的首条天气
             if (live != null) {
-                "☀️ ${live.city} ${live.weather} ${live.temperature}°C" // 拼接成我们要显示的字符串
+                // 拼接显示格式：图标 + 城市 + 天气描述 + 温度
+                "☀️ ${live.city} ${live.weather} ${live.temperature}°C" 
             } else {
-                "⚠️ 天气数据为空" // 如果列表为空的提示
+                "⚠️ 数据解析失败" 
             }
         } catch (e: Exception) {
-            "❌ 天气加载失败: ${e.message}" // 捕获网络异常（如没网、URL 错误）
+            "❌ 天气查询异常: ${e.message}"
         }
     }
 }
