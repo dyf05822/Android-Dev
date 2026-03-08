@@ -78,7 +78,7 @@ fun OnboardingScreen(navController: NavController) {      //用于做页面跳�
                     Spacer(modifier = Modifier.width(8.dp)) // 在文本和开关之间添加8dp的水平间隔
                     Switch( // 添加一个开关组件
                         checked = debugMode, // 开关的当前状态绑定到我们的debugMode变量
-                        onCheckedChange = { debugMode = it } // 当用户点击开关时，更新debugMode变量的值
+                        onCheckedChange = { debugMode = it } // 当用户点击开关时，更新debugMode变量的值   重点！！！！按钮的“取反”逻辑与案件不同
                     )
                 }
                 Spacer(modifier = Modifier.height(16.dp)) // 在开关和按钮之间添加16dp的垂直间隔
@@ -92,7 +92,7 @@ fun OnboardingScreen(navController: NavController) {      //用于做页面跳�
                         }
                         navController.navigate(destination) {    //跳转到我们刚才确定的目标页面
                             popUpTo("onboarding") { inclusive = true }   //跳转后从返回栈里删除 即用户进入login以后就不能返回到onboarding页面
-                        }
+                        }  //包含自己一起弹出 就回不去了
                     }
                 ) {
                     Text("点击进入") // 将按钮文本从“点击登录”改为更通用的“点击进入”

@@ -36,7 +36,7 @@ fun LoginScreen(navController: NavController) {     //定义登录屏幕函数
     var selectedTabIndex by remember { mutableStateOf(0) }    //选中的选项卡索引初始的状态是0  并且记住状态
     val tabs = listOf("用户名密码登录", "手机登录")   //两个标题
 
-    Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {   //全屏 顶部自动避开状态栏
+    Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {   //全屏 顶部自动避开状态栏 竖向布局
         TabRow(selectedTabIndex = selectedTabIndex) {      //告诉当前选中的是哪个
             tabs.forEachIndexed { index, title ->       //遍历拿到0/1和标题
                 Tab(selected = selectedTabIndex == index,
@@ -56,7 +56,7 @@ fun LoginScreen(navController: NavController) {     //定义登录屏幕函数
 fun UsernamePasswordLogin(navController: NavController) {
     var username by remember { mutableStateOf("") }     //输入框的状态
     var password by remember { mutableStateOf("") }
-    val context = LocalContext.current           //拿到Androidcontext为了弹Toast
+    val context = LocalContext.current           //拿到Androidcontext为了弹Toast  （不只是当前的输入文本还有系统环境信息）
 
     Column(
         modifier = Modifier

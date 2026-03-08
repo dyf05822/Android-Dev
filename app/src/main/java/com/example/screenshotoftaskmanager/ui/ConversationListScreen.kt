@@ -119,9 +119,9 @@ fun ConversationListItem( // 定义单个会话列表项的 UI
 
     // ✅ 用 Animatable 自己管理横向偏移：范围 [-openPx, 0]
     // 创建一个 Animatable 值来控制横向偏移，初始值为 0
-    val offsetX = remember { Animatable(0f) }    //实现动画效果 改变偏移值 保证动画过程中偏移值的连续性和一致性。
+    val offsetX = remember { Animatable(0f) }    //实现动画效果 改变偏移值 保证动画过程中偏移值的连续性和一致性。 支持拖拽跟手松手吸附点击收回动画丝滑！！
 
-    fun clamp(x: Float): Float = x.coerceIn(-openPx, 0f) // 定义一个clamp函数，将偏移量限制在 [-openPx, 0f] 范围内
+    fun clamp(x: Float): Float = x.coerceIn(-openPx, 0f) // 定义一个clamp函数，将偏移量限制在 [-openPx, 0f] 范围内 最多打开到按钮全部露出
 
     Box( // 使用 Box 布局，允许子组件堆叠
         modifier = Modifier
@@ -172,7 +172,7 @@ fun ConversationListItem( // 定义单个会话列表项的 UI
         }
 
         // 前景卡片层（可拖拽）
-        Card( // 使用 Card 组件作为前景
+        Card( // 使用 Card 组件作为前景 让每个聊天都在一个框框里！！！！！ 卡片容器组件
             modifier = Modifier
                 .fillMaxWidth() // 填充父容器的宽度
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) } // 根据 offsetX 的值来偏移卡片位置
@@ -181,7 +181,7 @@ fun ConversationListItem( // 定义单个会话列表项的 UI
                     state = rememberDraggableState { delta -> // 记住拖动状态
                         // delta>0 向右拖，delta<0 向左拖
                         scope.launch { // 在协程中处理拖动
-                            offsetX.snapTo(clamp(offsetX.value + delta)) // 立即更新偏移量，并限制在范围内
+                            offsetX.snapTo(clamp(offsetX.value + delta)) // 立即更新偏移量，并限制在范围内 snapto 拖拽跟手
                         }
                     },
                     onDragStopped = { velocity -> // 拖动停止时的回调函数

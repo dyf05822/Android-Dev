@@ -63,16 +63,16 @@ import kotlinx.coroutines.launch // 导入协程启动
 fun ConversationDetailScreen(navController: NavController, conversationName: String) { // 详情页入口
     
     val context = LocalContext.current // 获取当前 Android 上下文，用于位置请求
-    val conversation = remember(conversationName) { DataSource.getConversation(conversationName) } // 获取会话对象
+    val conversation = remember(conversationName) { DataSource.getConversation(conversationName) } // 通过datasource获取会话对象
     val messages = conversation.messages // 获取消息列表
-    val scope = rememberCoroutineScope() // 获取协程范围
+    val scope = rememberCoroutineScope() // 获取协程范围  用于启动协程如查天气需要同步
 
     // ✅ 新增：定义定位权限申请的启动器
     val locationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions(), // 同时申请精确定位和粗略定位
+        contract = ActivityResultContracts.RequestMultiplePermissions(), // 同时申请精确定位和粗略定位 请求多个权限
         onResult = { permissions -> // 申请结果回调
             val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-                          permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+                          permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true   //粗略定位和精确定位任意一个为true就为成功
             if (granted) {
                 // 用户授权后可以再次点击天气尝试获取
             }
@@ -80,14 +80,14 @@ fun ConversationDetailScreen(navController: NavController, conversationName: Str
     )
 
     // 重置未读数
-    LaunchedEffect(Unit) {
+    LaunchedEffect(Unit) {   //只在第一次进入这个compose时把未读数清0
         conversation.unreadCount = 0
     }
 
-    var textState by remember { mutableStateOf(TextFieldValue(conversation.draft)) } // 输入框状态
-    var showExtraOptions by remember { mutableStateOf(false) } // 更多选项显示开关
-    val listState = rememberLazyListState() // 滚动状态
-    var showImageSourceDialog by remember { mutableStateOf(false) } // 图片对话框开关
+    var textState by remember { mutableStateOf(TextFieldValue(conversation.draft)) } // 输入框状态包含光标 就是草稿恢复
+    var showExtraOptions by remember { mutableStateOf(false) } // 更多选项显示开关  是否显示图片天气那一行
+    val listState = rememberLazyListState() // 滚动状态自动滚到最后一条
+    var showImageSourceDialog by remember { mutableStateOf(false) } // 图片对话框开关是否弹出选图片来源的对话框
 
     // 图片选择器
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -98,25 +98,25 @@ fun ConversationDetailScreen(navController: NavController, conversationName: Str
     )
 
     // 自动滚动
-    LaunchedEffect(messages.size) {
+    LaunchedEffect(messages.size) {    //变了（增加了新消息）就自动滚动到最后
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
     }
 
     // 图片对话框
     if (showImageSourceDialog) {
-        AlertDialog(
-            onDismissRequest = { showImageSourceDialog = false },
+        AlertDialog(    //弹出对话框
+            onDismissRequest = { showImageSourceDialog = false },   //为true时弹出
             title = { Text("选择图片来源") },
             text = { Text("你想从哪里发送图片？") },
-            confirmButton = {
-                TextButton(onClick = {
+            confirmButton = {     //确认按钮
+                TextButton(onClick = {      //调用系统功能并返回结果photopicker 选图片  pickvisualmedia就是调用系统图库
                     photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     showImageSourceDialog = false
                 }) { Text("本机相册") }
             },
             dismissButton = {
                 TextButton(onClick = {
-                    val randomImage = DataSource.drawableResources.random()
+                    val randomImage = DataSource.drawableResources.random()    //随机选择照片
                     messages.add(Message(MessageSender.ME, "[图片]", type = "image", imageRes = randomImage))
                     showImageSourceDialog = false
                 }) { Text("随机照片") }
@@ -129,7 +129,7 @@ fun ConversationDetailScreen(navController: NavController, conversationName: Str
             TopAppBar(
                 title = { Text(conversationName) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navController.popBackStack() }) {    //返回按钮可以返回上一页
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 }
@@ -141,11 +141,11 @@ fun ConversationDetailScreen(navController: NavController, conversationName: Str
                     modifier = Modifier.fillMaxWidth().padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    OutlinedTextField(
+                    OutlinedTextField(     //聊天区域概述
                         value = textState,
                         onValueChange = {
                             textState = it
-                            conversation.draft = it.text
+                            conversation.draft = it.text    //同步写入草稿草稿实时保存
                         },
                         modifier = Modifier.weight(1f),
                         placeholder = { Text("输入内容...") }
@@ -154,8 +154,8 @@ fun ConversationDetailScreen(navController: NavController, conversationName: Str
                     IconButton(onClick = {
                         if (textState.text.isNotEmpty()) {
                             messages.add(Message(MessageSender.ME, textState.text))
-                            textState = TextFieldValue("")
-                            conversation.draft = ""
+                            textState = TextFieldValue("")  //发出去之后聊天框清零
+                            conversation.draft = ""    //非空才发出去消息 发出去以后草稿清零
                         }
                     }) {
                         Icon(Icons.Default.Send, contentDescription = "发送")
@@ -178,13 +178,13 @@ fun ConversationDetailScreen(navController: NavController, conversationName: Str
                                 val location = LocationHelper.getCurrentLocation(context)
                                 if (location != null) {
                                     // 2. 如果拿到经纬度，先去高德换取城市 adcode
-                                    val adcode = WeatherRepository.getCityCodeByLocation(location.longitude, location.latitude)
+                                    val adcode = WeatherRepository.getCityCodeByLocation(location.longitude, location.latitude)  //用经纬度换城市邮编
                                     // 3. 再拿着 adcode 去查真实天气
-                                    val realWeather = WeatherRepository.fetchWeather(adcode)
+                                    val realWeather = WeatherRepository.fetchWeather(adcode)  //用邮编换天气
                                     messages.add(Message(MessageSender.ME, realWeather, type = "weather"))
                                 } else {
                                     // 4. 如果位置为空，可能是没权限或 GPS 没开，申请权限提示用户
-                                    locationPermissionLauncher.launch(
+                                    locationPermissionLauncher.launch(   //失败可能是没开定位 弹窗允许定位
                                         arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
                                     )
                                     // 兜底方案：显示北京天气
@@ -202,7 +202,7 @@ fun ConversationDetailScreen(navController: NavController, conversationName: Str
             state = listState,
             modifier = Modifier.fillMaxSize().padding(innerPadding).padding(horizontal = 16.dp),
         ) {
-            items(messages) { message -> MessageBubble(message = message) }
+            items(messages) { message -> MessageBubble(message = message) }   //每一条都用messagebubble渲染
         }
     }
 }
@@ -211,31 +211,31 @@ fun ConversationDetailScreen(navController: NavController, conversationName: Str
 fun MessageBubble(message: Message) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        horizontalArrangement = if (message.sender == MessageSender.ME) Arrangement.End else Arrangement.Start
+        horizontalArrangement = if (message.sender == MessageSender.ME) Arrangement.End else Arrangement.Start   //自己消息靠右 对方消息靠左
     ) {
         if (message.sender == MessageSender.OTHER) {
-            Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(Color.LightGray))
+            Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(Color.LightGray))  //对方消息颜色是亮灰色
             Spacer(modifier = Modifier.width(8.dp))
         }
         Box(
             modifier = Modifier.background(
                 if (message.sender == MessageSender.ME) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(8.dp)     //自己用pri 对方用sec
             ).padding(12.dp)
         ) {
-            when (message.type) {
-                "text" -> Text(text = message.content)
+            when (message.type) {   //不同消息类型
+                "text" -> Text(text = message.content)             //下一行异步加载图片
                 "image" -> AsyncImage(model = message.imageUri ?: message.imageRes, contentDescription = "Image", modifier = Modifier.size(150.dp), contentScale = ContentScale.Crop)
                 "weather" -> Text(text = message.content)
             }
         }
         if (message.sender == MessageSender.ME) {
             Spacer(modifier = Modifier.width(8.dp))
-            AsyncImage(
+            AsyncImage(               //为什么要后台异步加载图片 因为图片加载很慢 不能阻塞ui线程 安卓只有一个ui主线程
                 model = DataSource.myAvatar,
                 contentDescription = "我的头像",
                 modifier = Modifier.size(40.dp).clip(CircleShape),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Crop     //contentscale  图片缩放模式 crop：填满容器其他多余部分裁剪掉
             )
         }
     }

@@ -42,15 +42,15 @@ import coil.compose.AsyncImage // 导入异步图片加载组件
 @Composable // 声明为 UI 组件
 fun ProfileScreen(mainNavController: NavController) { // “我的”屏幕组件
     
-    // 控制是否显示更换头像的弹窗
+    // 控制是否显示更换头像的弹窗 显示对话框
     var showDialog by remember { mutableStateOf(false) } 
 
-    // ✅ 图片选择器：处理从系统图库选择图片的逻辑
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia(), // 选择媒体文件协议
-        onResult = { uri: Uri? -> // 结果回调
-            uri?.let { // 如果用户选择了图片
-                DataSource.myAvatar = it.toString() // 将图片路径存入全局头像状态
+    // ✅ 图片选择器：处理从系统图库选择图片的逻辑  系统相册选择器
+    val photoPickerLauncher = rememberLauncherForActivityResult(    //创建一个启动器 可以调用它去打开系统功能
+        contract = ActivityResultContracts.PickVisualMedia(), //用来选择媒体文件协议
+        onResult = { uri: Uri? -> // 结果回调 用户选完照片以后回调回来
+            uri?.let { // 如果用户选择了图片    //uri可能为空用户取消选择 这样的话就？. 就什么都不做 uri不为空就执行后面操作
+                DataSource.myAvatar = it.toString() // 将图片路径存入全局头像状态 tostring作用是把uri对象变为字符串地址
                 showDialog = false // 关闭弹窗
             }
         }
@@ -88,7 +88,7 @@ fun ProfileScreen(mainNavController: NavController) { // “我的”屏幕组�
         )
     }
 
-    Scaffold( // 页面基础结构
+    Scaffold( // 页面基础结构脚手架
         topBar = {
             TopAppBar(title = { Text("我的") }) // 顶部显示“我的”
         }
@@ -108,7 +108,7 @@ fun ProfileScreen(mainNavController: NavController) { // “我的”屏幕组�
                     .background(Color.LightGray) // 设置灰色背景色（图片加载前的占位色）
                     .clickable { showDialog = true } // 点击头像弹出更换选择框
             ) {
-                AsyncImage( // 使用 Coil 加载图片
+                AsyncImage( // 使用 Coil 异步加载图片
                     model = DataSource.myAvatar, // 加载全局头像数据（支持 URI 或 ResID）
                     contentDescription = "我的头像", // 无障碍描述
                     modifier = Modifier.fillMaxSize(), // 填满 Box
@@ -126,7 +126,7 @@ fun ProfileScreen(mainNavController: NavController) { // “我的”屏幕组�
             Button(onClick = {
                 mainNavController.navigate("login") { // 导航回登录页
                     popUpTo(mainNavController.graph.startDestinationId) { // 清空所有返回栈
-                        inclusive = true // 包含起始页一并清除
+                        inclusive = true // 包含起始页一并清除  保证清空所有返回栈 要注意 栈底和栈顶先来的在底下 然后 pop是从上往下弹出的
                     }
                     launchSingleTop = true // 避免重复创建登录页
                 }

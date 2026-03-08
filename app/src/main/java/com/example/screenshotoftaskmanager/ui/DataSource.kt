@@ -20,7 +20,7 @@ data class Message( // 消息数据类
 // 会话类：包含姓名、消息记录及 UI 状态
 class Conversation(
     val name: String,
-    val messages: SnapshotStateList<Message>,
+    val messages: SnapshotStateList<Message>,   //快照状态列表
     initialIsPinned: Boolean = false,
     initialUnreadCount: Int = 0,
     initialDraft: String = ""
@@ -77,18 +77,18 @@ object DataSource { // 全局单例数据源
     )
 
     val conversations = mutableStateListOf<Conversation>().apply {
-        addAll(initialConversations)
+        addAll(initialConversations)       //所有消息列表
     }
 
-    fun getConversation(name: String): Conversation {
+    fun getConversation(name: String): Conversation {    //根据名字查找聊天
         return conversations.find { it.name == name } ?: run {
-            val newConv = Conversation(name = name, messages = mutableStateListOf())
+            val newConv = Conversation(name = name, messages = mutableStateListOf())    //找不到这个聊天就创造一个聊天
             conversations.add(newConv)
             newConv
         }
     }
 
-    fun getMessagesForConversation(newFriendName: String) {}
+    fun getMessagesForConversation(newFriendName: String) {}   //
 
     // 聊天内容中可选的图片库（用于发送图片消息，保持 photo1-5 不变）
     val drawableResources = listOf(R.drawable.photo1, R.drawable.photo2, R.drawable.photo3, R.drawable.photo4, R.drawable.photo5)
