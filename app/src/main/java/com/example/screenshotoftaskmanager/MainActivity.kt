@@ -21,6 +21,8 @@ import com.example.screenshotoftaskmanager.ui.ConversationDetailScreen // 导入
 import com.example.screenshotoftaskmanager.ui.LoginScreen // 导入登录页
 import com.example.screenshotoftaskmanager.ui.MainScreen // 导入主屏幕
 import com.example.screenshotoftaskmanager.ui.OnboardingScreen // 导入引导页
+import com.example.screenshotoftaskmanager.ui.RegisterScreen // 导入注册页
+import com.example.screenshotoftaskmanager.ui.DataSource // 导入DataSource用于预设账号
 import com.example.screenshotoftaskmanager.ui.theme.ScreenshotofTaskManagerTheme // 导入项目主题
 import kotlinx.coroutines.delay // 导入延迟函数
 import kotlinx.coroutines.launch // 导入协程开启函数 启动一个协程 异步任务：任务在后台执行不阻塞当前程序
@@ -47,6 +49,9 @@ class MainActivity : ComponentActivity() { // MainActivity 类定义
 
         super.onCreate(savedInstanceState) // 调用父类初始化
         
+        // 预设默认用户：用户名"admin"，密码"123456"，以便调试时直接登录
+        DataSource.registerUser(this, "admin", "123456") // 如果已存在，不会重复添加
+        
         enableEdgeToEdge() // 开启全屏边缘到边缘的沉浸式体验
         
         setContent { // 开始设置 Compose 渲染内容
@@ -71,6 +76,9 @@ fun TaskManagerApp() { // 应用主导航函数
         }
         composable("login") { // 登录页路由
             LoginScreen(navController = navController) // 渲染登录页
+        }
+        composable("register") { // 注册页路由
+            RegisterScreen(navController = navController) // 渲染注册页
         }
         composable("conversation_list") { // 会话列表页路由
             MainScreen(mainNavController = navController) // 渲染主界面（包含底部导航） Mainscreen作为主界面

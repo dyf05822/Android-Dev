@@ -88,12 +88,24 @@ fun ConversationDetailScreen(navController: NavController, conversationName: Str
     var showExtraOptions by remember { mutableStateOf(false) } // 更多选项显示开关  是否显示图片天气那一行
     val listState = rememberLazyListState() // 滚动状态自动滚到最后一条
     var showImageSourceDialog by remember { mutableStateOf(false) } // 图片对话框开关是否弹出选图片来源的对话框
+    var showChangeAvatarDialog by remember { mutableStateOf(false) } // 更换对方头像对话框开关
 
     // 图片选择器
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
         onResult = { uri: Uri? ->
             uri?.let { messages.add(Message(MessageSender.ME, "[图片]", type = "image", imageUri = it.toString())) }
+        }
+    )
+
+    // 对方头像选择器
+    val otherPhotoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        onResult = { uri: Uri? ->
+            uri?.let {
+                conversation.avatar = it.toString() // 更新对方头像
+                showChangeAvatarDialog = false // 关闭弹窗
+            }
         }
     )
 
@@ -124,6 +136,37 @@ fun ConversationDetailScreen(navController: NavController, conversationName: Str
         )
     }
 
+    // 更换对方头像对话框
+    if (showChangeAvatarDialog) {
+        AlertDialog(
+            onDismissRequest = { showChangeAvatarDialog = false },
+            title = { Text("更换对方头像") },
+            text = { Text("请选择头像来源：") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        otherPhotoPickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    }
+                ) {
+                    Text("本机相册")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        val randomRes = DataSource.profileResources.random()
+                        conversation.avatar = randomRes
+                        showChangeAvatarDialog = false
+                    }
+                ) {
+                    Text("随机头像")
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -131,6 +174,11 @@ fun ConversationDetailScreen(navController: NavController, conversationName: Str
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {    //返回按钮可以返回上一页
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showChangeAvatarDialog = true }) {
+                        Icon(Icons.Default.Image, contentDescription = "更换对方头像")
                     }
                 }
             )
@@ -202,19 +250,24 @@ fun ConversationDetailScreen(navController: NavController, conversationName: Str
             state = listState,
             modifier = Modifier.fillMaxSize().padding(innerPadding).padding(horizontal = 16.dp),
         ) {
-            items(messages) { message -> MessageBubble(message = message) }   //每一条都用messagebubble渲染
+            items(messages) { message -> MessageBubble(message = message, otherAvatar = conversation.avatar) }   //每一条都用messagebubble渲染
         }
     }
 }
 
 @Composable
-fun MessageBubble(message: Message) {
+fun MessageBubble(message: Message, otherAvatar: Any) { // 添加对方头像参数
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         horizontalArrangement = if (message.sender == MessageSender.ME) Arrangement.End else Arrangement.Start   //自己消息靠右 对方消息靠左
     ) {
         if (message.sender == MessageSender.OTHER) {
-            Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(Color.LightGray))  //对方消息颜色是亮灰色
+            AsyncImage( // 使用AsyncImage显示对方头像
+                model = otherAvatar,
+                contentDescription = "对方头像",
+                modifier = Modifier.size(40.dp).clip(CircleShape),
+                contentScale = ContentScale.Crop
+            )
             Spacer(modifier = Modifier.width(8.dp))
         }
         Box(

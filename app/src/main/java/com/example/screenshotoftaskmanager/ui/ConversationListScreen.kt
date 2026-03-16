@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -39,7 +40,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,6 +50,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -202,29 +206,40 @@ fun ConversationListItem( // 定义单个会话列表项的 UI
                     }
                 }
         ) {
-            Row( // 使用 Row 布局排列卡片内容
+            Row( // 使用 Row 布局排列卡片内容，从左到右依次为头像、名字和消息摘要、时间和未读数
                 modifier = Modifier.padding(16.dp), // 设置内边距
                 verticalAlignment = Alignment.CenterVertically // 子项在垂直方向上居中对齐
             ) {
-                Column(modifier = Modifier.weight(1f)) { // 左侧内容区域，占据剩余空间
-                    Row(verticalAlignment = Alignment.CenterVertically) { // 姓名和置顶图标行
+                AsyncImage( // 显示会话对方的圆形头像
+                    model = conversation.avatar, // 头像资源，可以是 drawable 或 URI
+                    contentDescription = "对方头像", // 内容描述，用于无障碍访问
+                    modifier = Modifier // 修饰符
+                        .size(40.dp) // 设置头像大小为 40dp
+                        .clip(CircleShape), // 裁剪为圆形
+                    contentScale = ContentScale.Crop // 缩放模式为裁剪，填满容器
+                )
+
+                Spacer(modifier = Modifier.width(8.dp)) // 添加水平间隔，距离头像 8dp
+
+                Column(modifier = Modifier.weight(1f)) { // 中间内容区域，占据剩余空间，包含名字和消息摘要
+                    Row(verticalAlignment = Alignment.CenterVertically) { // 名字和置顶图标行
                         Text( // 显示会话名称
-                            text = conversation.name,
+                            text = conversation.name, // 会话名字
                             fontWeight = FontWeight.Bold, // 字体加粗
-                            fontSize = 16.sp // 字体大小
+                            fontSize = 16.sp // 字体大小 16sp
                         )
                         if (conversation.isPinned) { // 如果会话已置顶
-                            Spacer(modifier = Modifier.width(6.dp)) // 添加一个间隔
+                            Spacer(modifier = Modifier.width(6.dp)) // 添加间隔
                             Icon( // 显示置顶图标
-                                imageVector = Icons.Filled.PushPin,
-                                contentDescription = "已置顶",
-                                modifier = Modifier.size(16.dp), // 设置图标大小
-                                tint = MaterialTheme.colorScheme.primary // 设置图标颜色
+                                imageVector = Icons.Filled.PushPin, // 置顶图标
+                                contentDescription = "已置顶", // 内容描述
+                                modifier = Modifier.size(16.dp), // 图标大小
+                                tint = MaterialTheme.colorScheme.primary // 图标颜色
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(4.dp)) // 添加一个垂直间隔
+                    Spacer(modifier = Modifier.height(4.dp)) // 添加垂直间隔，距离名字 4dp
 
                     val summaryText = if (conversation.draft.isNotEmpty()) { // 判断是否有草稿
                         "[草稿] ${conversation.draft}" // 如果有，显示草稿内容
@@ -238,20 +253,20 @@ fun ConversationListItem( // 定义单个会话列表项的 UI
                         Color.Gray // 否则使用灰色
                     }
 
-                    Text( // 显示摘要文本
-                        text = summaryText,
+                    Text( // 显示消息摘要文本
+                        text = summaryText, // 摘要内容
                         color = summaryColor, // 设置文本颜色
-                        fontSize = 14.sp, // 设置字体大小
+                        fontSize = 14.sp, // 设置字体大小 14sp
                         maxLines = 1, // 最多显示一行
                         overflow = TextOverflow.Ellipsis // 超出部分显示省略号
                     )
                 }
 
-                Spacer(modifier = Modifier.width(16.dp)) // 添加一个水平间隔
+                Spacer(modifier = Modifier.width(16.dp)) // 添加水平间隔，距离中间内容 16dp
 
-                Column(horizontalAlignment = Alignment.End) { // 右侧时间与未读数区域
+                Column(horizontalAlignment = Alignment.End) { // 右侧时间与未读数区域，对齐到末尾
                     Text("12:11", color = Color.Gray, fontSize = 12.sp) // 显示消息时间（这里是硬编码的）
-                    Spacer(modifier = Modifier.height(4.dp)) // 添加一个垂直间隔
+                    Spacer(modifier = Modifier.height(4.dp)) // 添加垂直间隔
                     if (conversation.unreadCount > 0) { // 如果有未读消息
                         Badge { Text(text = "${conversation.unreadCount}") } // 使用 Badge 显示未读消息数量
                     }

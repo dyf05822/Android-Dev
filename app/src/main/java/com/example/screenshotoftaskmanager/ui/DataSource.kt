@@ -1,5 +1,6 @@
 package com.example.screenshotoftaskmanager.ui // 定义包名
 
+import android.content.Context // 导入Context用于SharedPreferences
 import androidx.compose.runtime.getValue // 属性读取委托
 import androidx.compose.runtime.mutableStateListOf // 创建可观察列表
 import androidx.compose.runtime.mutableStateOf // 创建可变状态
@@ -23,11 +24,13 @@ class Conversation(
     val messages: SnapshotStateList<Message>,   //快照状态列表
     initialIsPinned: Boolean = false,
     initialUnreadCount: Int = 0,
-    initialDraft: String = ""
+    initialDraft: String = "",
+    initialAvatar: Any = R.drawable.profile1 // 默认对方头像
 ) {
     var isPinned by mutableStateOf(initialIsPinned) // 代理置顶状态
     var unreadCount by mutableStateOf(initialUnreadCount) // 代理未读状态
     var draft by mutableStateOf(initialDraft) // 代理草稿状态
+    var avatar by mutableStateOf(initialAvatar) // 对方头像状态
 }
 
 object DataSource { // 全局单例数据源
@@ -43,6 +46,9 @@ object DataSource { // 全局单例数据源
         R.drawable.profile4,
         R.drawable.profile5
     )
+
+    // 新增：全局昵称状态，初始值为“未设置昵称”
+    var myNickname by mutableStateOf("未设置昵称") // 全局昵称状态
 
     private val initialConversations = listOf(
         Conversation(
@@ -92,4 +98,30 @@ object DataSource { // 全局单例数据源
 
     // 聊天内容中可选的图片库（用于发送图片消息，保持 photo1-5 不变）
     val drawableResources = listOf(R.drawable.photo1, R.drawable.photo2, R.drawable.photo3, R.drawable.photo4, R.drawable.photo5)
+
+    // 用户注册函数：检查用户名是否已存在，如果不存在则保存用户名和密码
+    fun registerUser(context: Context, username: String, password: String): Boolean { // 返回注册是否成功
+        val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE) // 获取SharedPreferences实例
+        val key = "username_$username" // 存储键格式：username_用户名
+        if (prefs.contains(key)) { // 如果键已存在，表示用户名已注册
+            return false // 注册失败
+        }
+        prefs.edit().putString(key, password).apply() // 保存密码（明文）
+        return true // 注册成功
+    }
+
+    // 检查用户名是否已注册
+    fun isUserRegistered(context: Context, username: String): Boolean { // 返回是否已注册
+        val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE) // 获取SharedPreferences实例
+        val key = "username_$username" // 存储键格式
+        return prefs.contains(key) // 检查键是否存在
+    }
+
+    // 用户登录函数：检查用户名和密码是否匹配
+    fun loginUser(context: Context, username: String, password: String): Boolean { // 返回登录是否成功
+        val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE) // 获取SharedPreferences实例
+        val key = "username_$username" // 存储键格式
+        val storedPassword = prefs.getString(key, null) // 获取存储的密码
+        return storedPassword == password // 比较密码
+    }
 }

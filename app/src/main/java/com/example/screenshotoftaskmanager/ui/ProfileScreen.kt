@@ -37,13 +37,20 @@ import androidx.compose.ui.unit.dp // 导入 dp 单位
 import androidx.compose.ui.unit.sp // 导入 sp 单位
 import androidx.navigation.NavController // 导入导航控制器
 import coil.compose.AsyncImage // 导入异步图片加载组件
+import com.example.screenshotoftaskmanager.ui.DataSource      // 导入全局数据源，确保myNickname可用
 
 @OptIn(ExperimentalMaterial3Api::class) // 启用实验性 API
 @Composable // 声明为 UI 组件
 fun ProfileScreen(mainNavController: NavController) { // “我的”屏幕组件
     
     // 控制是否显示更换头像的弹窗 显示对话框
-    var showDialog by remember { mutableStateOf(false) } 
+    var showDialog by remember { mutableStateOf(false) } // 头像弹窗状态
+
+    // 控制是否显示更改昵称弹窗
+    var showNicknameDialog by remember { mutableStateOf(false) } // 昵称弹窗状态
+
+    // 临时昵称输入状态，初始值为当前昵称，显式指定类型为String
+    var nicknameInput by remember { mutableStateOf<String>(DataSource.myNickname) } // 昵称输入框内容
 
     // ✅ 图片选择器：处理从系统图库选择图片的逻辑  系统相册选择器
     val photoPickerLauncher = rememberLauncherForActivityResult(    //创建一个启动器 可以调用它去打开系统功能
@@ -88,6 +95,36 @@ fun ProfileScreen(mainNavController: NavController) { // “我的”屏幕组�
         )
     }
 
+    // ✅ 昵称更改弹窗逻辑
+    if (showNicknameDialog) { // 如果需要显示更改昵称弹窗
+        AlertDialog(
+            onDismissRequest = { showNicknameDialog = false }, // 点击外部关闭弹窗
+            title = { Text("更改昵称") }, // 弹窗标题
+            text = {
+                androidx.compose.material3.OutlinedTextField(
+                    value = nicknameInput, // 输入框内容
+                    onValueChange = { nicknameInput = it }, // 输入内容变化
+                    label = @Composable { Text("请输入新昵称") } // 输入框标签
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (nicknameInput.isNotBlank()) { // 输入不为空
+                        DataSource.myNickname = nicknameInput // 更新全局昵称
+                        showNicknameDialog = false // 关闭弹窗
+                    }
+                }) {
+                    Text("确认") // 按钮文本
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNicknameDialog = false }) {
+                    Text("取消") // 按钮文本
+                }
+            }
+        )
+    }
+
     Scaffold( // 页面基础结构脚手架
         topBar = {
             TopAppBar(title = { Text("我的") }) // 顶部显示“我的”
@@ -100,7 +137,7 @@ fun ProfileScreen(mainNavController: NavController) { // “我的”屏幕组�
             horizontalAlignment = Alignment.CenterHorizontally, // 内部子项水平居中
             verticalArrangement = Arrangement.Center // 内部子项垂直居中
         ) {
-            // ✅ 头像显示区域
+            // 头像显示区域
             Box(
                 modifier = Modifier
                     .size(120.dp) // 头像显示大小为 120dp
@@ -116,7 +153,21 @@ fun ProfileScreen(mainNavController: NavController) { // “我的”屏幕组�
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp)) // 头像下方的间距
+            Spacer(modifier = Modifier.height(16.dp)) // 头像下方间距
+
+            // 昵称显示与更改工具
+            Text(
+                text = DataSource.myNickname, // 昵称内容
+                fontSize = 18.sp, // 字体大小
+                color = Color.Black, // 字体颜色
+                modifier = Modifier.clickable {
+                    nicknameInput = DataSource.myNickname // 初始化输入框内容
+                    showNicknameDialog = true // 弹出更改昵称弹窗
+                }
+            )
+            Text(text = "点击昵称更改", fontSize = 14.sp, color = Color.Gray) // 昵称提示
+
+            Spacer(modifier = Modifier.height(16.dp)) // 间距
 
             Text(text = "点击头像更换", fontSize = 14.sp, color = Color.Gray) // 提示文本
 

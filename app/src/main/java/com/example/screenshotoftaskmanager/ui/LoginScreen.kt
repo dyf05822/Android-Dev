@@ -81,14 +81,27 @@ fun UsernamePasswordLogin(navController: NavController) {
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(32.dp))
-        Button(onClick = {      //用户名怎么怎么样 密码怎么怎么样 允许登录   然后导航到聊天列表删除返回栈
-            if (username.count { it.isDigit() } >= 3 && password.length > 5) {
-                navController.navigate("conversation_list") { popUpTo("login") { inclusive = true } }
-            } else {
-                Toast.makeText(context, "用户名至少包含三个数字且密码长度大于5", Toast.LENGTH_SHORT).show()
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) { // 使用Row水平排列登录和注册按钮
+            Button(onClick = { // 登录按钮点击事件
+                when { // 使用when进行条件判断
+                    !DataSource.isUserRegistered(context, username) -> { // 用户名未注册
+                        Toast.makeText(context, "账号未注册", Toast.LENGTH_SHORT).show() // 显示Toast提示
+                    }
+                    !DataSource.loginUser(context, username, password) -> { // 密码错误
+                        Toast.makeText(context, "密码错误", Toast.LENGTH_SHORT).show() // 显示Toast提示
+                    }
+                    else -> { // 登录成功
+                        navController.navigate("conversation_list") { popUpTo("login") { inclusive = true } } // 导航到聊天列表并清除返回栈
+                    }
+                }
+            }) {
+                Text("登录") // 按钮文本
             }
-        }) {
-            Text("登录")
+            Button(onClick = { // 注册按钮点击事件
+                navController.navigate("register") // 导航到注册屏幕
+            }) {
+                Text("注册") // 按钮文本
+            }
         }
     }
 }
