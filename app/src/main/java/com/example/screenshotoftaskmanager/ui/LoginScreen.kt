@@ -2,6 +2,7 @@ package com.example.screenshotoftaskmanager.ui
 
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
+import com.example.screenshotoftaskmanager.AuthManager // 导入 AuthManager 用于 Firebase 认证
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -54,52 +55,69 @@ fun LoginScreen(navController: NavController) {     //定义登录屏幕函数
 
 @Composable
 fun UsernamePasswordLogin(navController: NavController) {
-    var username by remember { mutableStateOf("") }     //输入框的状态
-    var password by remember { mutableStateOf("") }
-    val context = LocalContext.current           //拿到Androidcontext为了弹Toast  （不只是当前的输入文本还有系统环境信息）
+    // 使用账号而不是邮箱，用于 Firebase 身份验证
+    var username by remember { mutableStateOf("") }     // 保存账号输入框的状态
+    var password by remember { mutableStateOf("") }   // 保存密码输入框的状态
+    var isLoading by remember { mutableStateOf(false) } // 记录是否正在登录，用于禁用按钮和显示加载状态
+    val context = LocalContext.current           // 获取 Android 上下文，用于显示 Toast 消息
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(32.dp),  //四周内边距32dp
-        horizontalAlignment = Alignment.CenterHorizontally,    //水平垂直都居中
-        verticalArrangement = Arrangement.Center
+            .padding(32.dp),  // 四周内边距 32dp
+        horizontalAlignment = Alignment.CenterHorizontally,    // 水平居中对齐
+        verticalArrangement = Arrangement.Center // 垂直居中排列
     ) {
-        OutlinedTextField(          //用户名输入框
-            value = username,            //绑定状态
-            onValueChange = { username = it },           //每输入一个字就更新状态
-            label = { Text("用户名") },
-            modifier = Modifier.fillMaxWidth()           //输入框占满宽度
+        OutlinedTextField(          // 账号输入框
+            value = username,            // 绑定账号状态
+            onValueChange = { username = it },           // 账号输入变化时更新状态
+            label = { Text("账号") }, // 输入框标签
+            modifier = Modifier.fillMaxWidth(),          // 输入框占满宽度
+            enabled = !isLoading // 加载时禁用输入框
         )
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(16.dp)) // 添加 16dp 的垂直间隔
         OutlinedTextField(
             value = password,
-            onValueChange = { password = it },
+            onValueChange = { password = it }, // 密码输入变化时更新状态
             label = { Text("密码") },
-            visualTransformation = PasswordVisualTransformation(),      //把输入转换成●●●
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),    //弹出更适合密码的键盘
-            modifier = Modifier.fillMaxWidth()
+            visualTransformation = PasswordVisualTransformation(),      // 密码显示为●●●
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),    // 弹出密码键盘
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading // 加载时禁用输入框
         )
-        Spacer(modifier = Modifier.height(32.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) { // 使用Row水平排列登录和注册按钮
+        Spacer(modifier = Modifier.height(32.dp)) // 添加 32dp 的垂直间隔
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) { // 使用 Row 水平排列登录和注册按钮
             Button(onClick = { // 登录按钮点击事件
-                when { // 使用when进行条件判断
-                    !DataSource.isUserRegistered(context, username) -> { // 用户名未注册
-                        Toast.makeText(context, "账号未注册", Toast.LENGTH_SHORT).show() // 显示Toast提示
-                    }
-                    !DataSource.loginUser(context, username, password) -> { // 密码错误
-                        Toast.makeText(context, "密码错误", Toast.LENGTH_SHORT).show() // 显示Toast提示
-                    }
-                    else -> { // 登录成功
-                        navController.navigate("conversation_list") { popUpTo("login") { inclusive = true } } // 导航到聊天列表并清除返回栈
+                // 验证账号和密码不为空
+                if (username.isBlank() || password.isBlank()) {
+                    Toast.makeText(context, "账号和密码不能为空", Toast.LENGTH_SHORT).show() // 显示空值验证错误
+                    return@Button // 如果为空则返回，不继续执行
+                }
+                
+                // 设置加载状态为 true，禁用按钮并显示加载动画
+                isLoading = true
+                
+                // 调用 AuthManager 的 login 函数进行 Firebase 身份验证
+                AuthManager.login(username, password) { success, message ->
+                    // 登录完成后的回调函数
+                    isLoading = false // 设置加载状态为 false，恢复按钮可用
+                    
+                    if (success) {
+                        // 登录成功：显示成功消息并导航到聊天列表
+                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show() // 显示登录成功消息
+                        // 导航到 "conversation_list" 路由，并清除返回栈（popUpTo 确保不能返回到登录页）
+                        navController.navigate("conversation_list") { popUpTo("login") { inclusive = true } }
+                    } else {
+                        // 登录失败：显示错误消息
+                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show() // 显示登录失败的原因
                     }
                 }
-            }) {
+            }, enabled = !isLoading) { // 加载时禁用按钮
                 Text("登录") // 按钮文本
             }
             Button(onClick = { // 注册按钮点击事件
                 navController.navigate("register") // 导航到注册屏幕
-            }) {
+            }, enabled = !isLoading) { // 加载时禁用按钮
                 Text("注册") // 按钮文本
             }
         }

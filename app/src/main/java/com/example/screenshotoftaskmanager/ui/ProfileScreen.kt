@@ -9,20 +9,26 @@ import androidx.compose.foundation.clickable // 导入点击事件修饰符
 import androidx.compose.foundation.layout.Arrangement // 导入布局排列方式
 import androidx.compose.foundation.layout.Box // 导入 Box 布局
 import androidx.compose.foundation.layout.Column // 导入垂直布局
+import androidx.compose.foundation.layout.Row // 导入水平布局
 import androidx.compose.foundation.layout.Spacer // 导入间距组件
 import androidx.compose.foundation.layout.fillMaxSize // 导入填充全屏修饰符
 import androidx.compose.foundation.layout.height // 导入高度修饰符
 import androidx.compose.foundation.layout.padding // 导入内边距修饰符
 import androidx.compose.foundation.layout.size // 导入尺寸修饰符
 import androidx.compose.foundation.shape.CircleShape // 导入圆形形状
+import androidx.compose.material.icons.Icons // 导入图标库
+import androidx.compose.material.icons.filled.Edit // 导入铅笔图标
 import androidx.compose.material3.AlertDialog // 导入对话框组件
 import androidx.compose.material3.Button // 导入按钮组件
 import androidx.compose.material3.ExperimentalMaterial3Api // 导入实验性 API 标记
+import androidx.compose.material3.Icon // 导入图标组件
+import androidx.compose.material3.IconButton // 导入图标按钮组件
 import androidx.compose.material3.MaterialTheme // 导入主题库
 import androidx.compose.material3.Scaffold // 导入脚手架布局
 import androidx.compose.material3.Text // 导入文本组件
 import androidx.compose.material3.TextButton // 导入文本按钮组件
 import androidx.compose.material3.TopAppBar // 导入顶部栏组件
+import androidx.compose.material3.TopAppBarDefaults // 导入顶部栏默认样式
 import androidx.compose.runtime.Composable // 导入可组合函数注解
 import androidx.compose.runtime.getValue // 导入属性读取委托
 import androidx.compose.runtime.mutableStateOf // 导入状态创建函数
@@ -49,8 +55,14 @@ fun ProfileScreen(mainNavController: NavController) { // “我的”屏幕组�
     // 控制是否显示更改昵称弹窗
     var showNicknameDialog by remember { mutableStateOf(false) } // 昵称弹窗状态
 
+    // 控制是否显示更改个性签名弹窗
+    var showSignatureDialog by remember { mutableStateOf(false) } // 个性签名弹窗状态
+
     // 临时昵称输入状态，初始值为当前昵称，显式指定类型为String
     var nicknameInput by remember { mutableStateOf<String>(DataSource.myNickname) } // 昵称输入框内容
+
+    // 临时个性签名输入状态，初始值为当前个性签名
+    var signatureInput by remember { mutableStateOf<String>(DataSource.mySignature) } // 个性签名输入框内容
 
     // ✅ 图片选择器：处理从系统图库选择图片的逻辑  系统相册选择器
     val photoPickerLauncher = rememberLauncherForActivityResult(    //创建一个启动器 可以调用它去打开系统功能
@@ -125,9 +137,44 @@ fun ProfileScreen(mainNavController: NavController) { // “我的”屏幕组�
         )
     }
 
+    // ✅ 个性签名更改弹窗逻辑
+    if (showSignatureDialog) { // 如果需要显示更改个性签名弹窗
+        AlertDialog(
+            onDismissRequest = { showSignatureDialog = false }, // 点击外部关闭弹窗
+            title = { Text("更改个性签名") }, // 弹窗标题
+            text = {
+                androidx.compose.material3.OutlinedTextField(
+                    value = signatureInput, // 输入框内容
+                    onValueChange = { signatureInput = it }, // 输入内容变化
+                    label = @Composable { Text("请输入新个性签名") } // 输入框标签
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (signatureInput.isNotBlank()) { // 输入不为空
+                        DataSource.mySignature = signatureInput // 更新全局个性签名
+                        showSignatureDialog = false // 关闭弹窗
+                    }
+                }) {
+                    Text("确认") // 按钮文本
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSignatureDialog = false }) {
+                    Text("取消") // 按钮文本
+                }
+            }
+        )
+    }
+
     Scaffold( // 页面基础结构脚手架
         topBar = {
-            TopAppBar(title = { Text("我的") }) // 顶部显示“我的”
+            TopAppBar(
+                title = { Text("我的") }, // 顶部显示"我的"
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary // 设置背景颜色为深蓝色
+                )
+            )
         }
     ) { innerPadding -> // 内容区域，处理顶部栏遮挡
         Column(
@@ -137,41 +184,96 @@ fun ProfileScreen(mainNavController: NavController) { // “我的”屏幕组�
             horizontalAlignment = Alignment.CenterHorizontally, // 内部子项水平居中
             verticalArrangement = Arrangement.Center // 内部子项垂直居中
         ) {
-            // 头像显示区域
-            Box(
-                modifier = Modifier
-                    .size(120.dp) // 头像显示大小为 120dp
-                    .clip(CircleShape) // 裁剪成圆形
-                    .background(Color.LightGray) // 设置灰色背景色（图片加载前的占位色）
-                    .clickable { showDialog = true } // 点击头像弹出更换选择框
+            // 头像显示区域与更换按钮
+            Row(
+                verticalAlignment = Alignment.CenterVertically, // 垂直居中对齐
+                horizontalArrangement = Arrangement.Center // 水平居中排列
             ) {
-                AsyncImage( // 使用 Coil 异步加载图片
-                    model = DataSource.myAvatar, // 加载全局头像数据（支持 URI 或 ResID）
-                    contentDescription = "我的头像", // 无障碍描述
-                    modifier = Modifier.fillMaxSize(), // 填满 Box
-                    contentScale = ContentScale.Crop // 裁剪模式填充，保证圆形不变形
-                )
+                Box(
+                    modifier = Modifier
+                        .size(120.dp) // 头像显示大小为 120dp
+                        .clip(CircleShape) // 裁剪成圆形
+                        .background(Color.LightGray) // 设置灰色背景色（图片加载前的占位色）
+                        .clickable { showDialog = true } // 点击头像弹出更换选择框
+                ) {
+                    AsyncImage( // 使用 Coil 异步加载图片
+                        model = DataSource.myAvatar, // 加载全局头像数据（支持 URI 或 ResID）
+                        contentDescription = "我的头像", // 无障碍描述
+                        modifier = Modifier.fillMaxSize(), // 填满 Box
+                        contentScale = ContentScale.Crop // 裁剪模式填充，保证圆形不变形
+                    )
+                }
+                // 头像更换按钮（铅笔图标）
+                IconButton(onClick = {
+                    showDialog = true // 打开头像更换对话框
+                }) {
+                    Icon(
+                        imageVector = Icons.Filled.Edit, // 铅笔图标
+                        contentDescription = "编辑头像", // 无障碍描述
+                        tint = Color.Gray // 图标颜色
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp)) // 头像下方间距
 
             // 昵称显示与更改工具
-            Text(
-                text = DataSource.myNickname, // 昵称内容
-                fontSize = 18.sp, // 字体大小
-                color = Color.Black, // 字体颜色
-                modifier = Modifier.clickable {
+            Row(
+                verticalAlignment = Alignment.CenterVertically, // 垂直居中对齐
+                horizontalArrangement = Arrangement.Center // 水平居中排列
+            ) {
+                Text(
+                    text = DataSource.myNickname, // 昵称内容
+                    fontSize = 18.sp, // 字体大小
+                    color = Color.Black, // 字体颜色
+                    modifier = Modifier.clickable {
+                        nicknameInput = DataSource.myNickname // 初始化输入框内容
+                        showNicknameDialog = true // 弹出更改昵称弹窗
+                    }
+                )
+                IconButton(onClick = {
                     nicknameInput = DataSource.myNickname // 初始化输入框内容
                     showNicknameDialog = true // 弹出更改昵称弹窗
+                }) {
+                    Icon(
+                        imageVector = Icons.Filled.Edit, // 铅笔图标
+                        contentDescription = "编辑昵称", // 无障碍描述
+                        tint = Color.Gray // 图标颜色
+                    )
                 }
-            )
-            Text(text = "点击昵称更改", fontSize = 14.sp, color = Color.Gray) // 昵称提示
+            }
+
+            Spacer(modifier = Modifier.height(8.dp)) // 昵称与个性签名间距
+
+            // 个性签名显示与更改工具
+            Row(
+                verticalAlignment = Alignment.CenterVertically, // 垂直居中对齐
+                horizontalArrangement = Arrangement.Center // 水平居中排列
+            ) {
+                Text(
+                    text = DataSource.mySignature, // 个性签名内容
+                    fontSize = 16.sp, // 字体大小
+                    color = Color.DarkGray, // 字体颜色
+                    modifier = Modifier.clickable {
+                        signatureInput = DataSource.mySignature // 初始化输入框内容
+                        showSignatureDialog = true // 弹出更改个性签名弹窗
+                    }
+                )
+                IconButton(onClick = {
+                    signatureInput = DataSource.mySignature // 初始化输入框内容
+                    showSignatureDialog = true // 弹出更改个性签名弹窗
+                }) {
+                    Icon(
+                        imageVector = Icons.Filled.Edit, // 铅笔图标
+                        contentDescription = "编辑个性签名", // 无障碍描述
+                        tint = Color.Gray // 图标颜色
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(16.dp)) // 间距
 
-            Text(text = "点击头像更换", fontSize = 14.sp, color = Color.Gray) // 提示文本
-
-            Spacer(modifier = Modifier.height(40.dp)) // 提示文本与按钮之间的间距
+            Spacer(modifier = Modifier.height(40.dp)) // 间距与按钮之间的距离
 
             // 退出登录按钮
             Button(onClick = {

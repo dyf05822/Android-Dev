@@ -50,6 +50,9 @@ object DataSource { // 全局单例数据源
     // 新增：全局昵称状态，初始值为“未设置昵称”
     var myNickname by mutableStateOf("未设置昵称") // 全局昵称状态
 
+    // 新增：全局个性签名状态，初始值为“行百里路者半九十”
+    var mySignature by mutableStateOf("行百里路者半九十") // 全局个性签名状态
+
     private val initialConversations = listOf(
         Conversation(
             name = "小明",

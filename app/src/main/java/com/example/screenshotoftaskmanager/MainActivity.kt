@@ -25,7 +25,8 @@ import com.example.screenshotoftaskmanager.ui.RegisterScreen // 导入注册页
 import com.example.screenshotoftaskmanager.ui.DataSource // 导入DataSource用于预设账号
 import com.example.screenshotoftaskmanager.ui.theme.ScreenshotofTaskManagerTheme // 导入项目主题
 import kotlinx.coroutines.delay // 导入延迟函数
-import kotlinx.coroutines.launch // 导入协程开启函数 启动一个协程 异步任务：任务在后台执行不阻塞当前程序
+import kotlinx.coroutines.launch// 导入协程开启函数 启动一个协程 异步任务：任务在后台执行不阻塞当前程序
+import com.google.firebase.FirebaseApp // 导入FirebaseApp用于初始化Firebase服务
 
 class MainActivity : ComponentActivity() { // MainActivity 类定义
 
@@ -48,6 +49,8 @@ class MainActivity : ComponentActivity() { // MainActivity 类定义
         }
 
         super.onCreate(savedInstanceState) // 调用父类初始化
+        
+        FirebaseApp.initializeApp(this) // ✅ Firebase 初始化
         
         // 预设默认用户：用户名"admin"，密码"123456"，以便调试时直接登录
         DataSource.registerUser(this, "admin", "123456") // 如果已存在，不会重复添加

@@ -35,6 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -71,7 +72,10 @@ fun ConversationListScreen(navController: NavController) { // 定义会话列表
     Scaffold( // 使用 Material3 的 Scaffold 脚手架布局
         topBar = { // 定义顶部应用栏
             TopAppBar( // 使用 TopAppBar 组件
-                title = { Text("消息") }, // 设置标题为“消息”
+                title = { Text("消息") }, // 设置标题为"消息"
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary // 设置背景颜色为深蓝色
+                ),
                 actions = { // 定义右侧的操作按钮
                     IconButton(onClick = { // 添加一个图标按钮
                         var newFriendNumber = 1 // 初始化新朋友的编号
@@ -140,37 +144,39 @@ fun ConversationListItem( // 定义单个会话列表项的 UI
             verticalAlignment = Alignment.CenterVertically // 子项在垂直方向上居中对齐
         ) {
             // 置顶按钮
-            IconButton( // 创建一个图标按钮
-                onClick = { // 定义点击事件
-                    conversation.isPinned = !conversation.isPinned // 切换会话的置顶状态
-                    scope.launch { // 启动一个协程
-                        offsetX.animateTo(0f, tween(180)) // 以动画方式将卡片移回原位 targetvalue动画目标值 动画规格、动画持续时间Tween 是基于时间的渐变动画，在起始值和结束值间创建平滑过渡，通过设定动画时长、延迟时间和缓动曲线来定义动画变化过程。
-                    }
-                },
+            Box( // 使用 Box 替代 IconButton 以获得完整的高度控制
                 modifier = Modifier
                     .width(80.dp) // 设置按钮宽度为 80.dp
-                    .fillMaxHeight() // 填充父容器的高度
+                    .fillMaxHeight() // 填充父容器的高度，使按钮高度满满的
                     .background(MaterialTheme.colorScheme.tertiaryContainer) // 设置背景颜色
+                    .clickable { // 定义点击事件
+                        conversation.isPinned = !conversation.isPinned // 切换会话的置顶状态
+                        scope.launch { // 启动一个协程
+                            offsetX.animateTo(0f, tween(180)) // 以动画方式将卡片移回原位 targetvalue动画目标值 动画规格、动画持续时间Tween 是基于时间的渐变动画，在起始值和结束值间创建平滑过渡，通过设定动画时长、延迟时间和缓动曲线来定义动画变化过程。
+                        }
+                    },
+                contentAlignment = Alignment.Center // 内容居中对齐
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) { // 使用 Column 将图标和文字垂直排列
                     Icon(Icons.Filled.PushPin, contentDescription = "置顶") // 显示置顶图标
-                    Text("置顶", fontSize = 12.sp) // 显示“置顶”文字
+                    Text("置顶", fontSize = 12.sp) // 显示"置顶"文字
                 }
             }
 
             // 删除按钮
-            IconButton( // 创建一个图标按钮
-                onClick = { // 定义点击事件
-                    DataSource.conversations.remove(conversation) // 从数据源中删除此会话
-                },
+            Box( // 使用 Box 替代 IconButton 以获得完整的高度控制
                 modifier = Modifier
                     .width(80.dp) // 设置按钮宽度为 80.dp
-                    .fillMaxHeight() // 填充父容器的高度
+                    .fillMaxHeight() // 填充父容器的高度，使按钮高度满满的
                     .background(MaterialTheme.colorScheme.errorContainer) // 设置背景颜色
+                    .clickable { // 定义点击事件
+                        DataSource.conversations.remove(conversation) // 从数据源中删除此会话
+                    },
+                contentAlignment = Alignment.Center // 内容居中对齐
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) { // 使用 Column 将图标和文字垂直排列
                     Icon(Icons.Filled.Delete, contentDescription = "删除") // 显示删除图标
-                    Text("删除", fontSize = 12.sp) // 显示“删除”文字
+                    Text("删除", fontSize = 12.sp) // 显示"删除"文字
                 }
             }
         }

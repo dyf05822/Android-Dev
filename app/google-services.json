@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "625744097755",
+    "project_id": "chatapp-dc383",
+    "storage_bucket": "chatapp-dc383.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:625744097755:android:92ceed8dafcfc861bd77fe",
+        "android_client_info": {
+          "package_name": "com.example.screenshotoftaskmanager"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAI_O7hHcFkNWppm831YjmMSrIUVhBuj-w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
