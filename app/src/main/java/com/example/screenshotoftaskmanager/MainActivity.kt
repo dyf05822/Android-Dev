@@ -22,11 +22,10 @@ import com.example.screenshotoftaskmanager.ui.LoginScreen // 导入登录页
 import com.example.screenshotoftaskmanager.ui.MainScreen // 导入主屏幕
 import com.example.screenshotoftaskmanager.ui.OnboardingScreen // 导入引导页
 import com.example.screenshotoftaskmanager.ui.RegisterScreen // 导入注册页
-import com.example.screenshotoftaskmanager.ui.DataSource // 导入DataSource用于预设账号
 import com.example.screenshotoftaskmanager.ui.theme.ScreenshotofTaskManagerTheme // 导入项目主题
+import com.google.firebase.FirebaseApp // 导入FirebaseApp用于初始化Firebase服务
 import kotlinx.coroutines.delay // 导入延迟函数
 import kotlinx.coroutines.launch// 导入协程开启函数 启动一个协程 异步任务：任务在后台执行不阻塞当前程序
-import com.google.firebase.FirebaseApp // 导入FirebaseApp用于初始化Firebase服务
 
 class MainActivity : ComponentActivity() { // MainActivity 类定义
 
@@ -34,34 +33,24 @@ class MainActivity : ComponentActivity() { // MainActivity 类定义
     private var keepSplashScreen = true
 
     override fun onCreate(savedInstanceState: Bundle?) { // onCreate 生命周期方法
-        
-        // 1. 安装启动页，并获取启动页对象
-        val splashScreen = installSplashScreen() //调用官方splash api 系统启动时就会先显示启动页 返回一个splashscreen对象
+        val splashScreen = installSplashScreen() // 调用官方 splash api，系统启动时先显示启动页
+        splashScreen.setKeepOnScreenCondition { keepSplashScreen } // 只要 keepSplashScreen 是 true，启动页就不消失
 
-        // 2. 设置启动页保持在屏幕上的条件：只要 keepSplashScreen 是 true，启动页就不消失
-        splashScreen.setKeepOnScreenCondition { keepSplashScreen }
-
-        // ✅ 修改点：在生命周期协程中执行延时操作
-        // 旋转 1s + 停顿 0.7s = 1.7s。转两圈并停顿两次总共需要 3.4s (3400ms)
         lifecycleScope.launch {
             delay(3400) // 强制让启动页在此停留 3400 毫秒 (3.4 秒)
-            keepSplashScreen = false // 3.4 秒时间到，将变量设为 false，启动页平滑消失，进入欢迎页
+            keepSplashScreen = false // 时间到后平滑消失，进入欢迎页
         }
 
         super.onCreate(savedInstanceState) // 调用父类初始化
-        
-        FirebaseApp.initializeApp(this) // ✅ Firebase 初始化
-        
-        // 预设默认用户：用户名"admin"，密码"123456"，以便调试时直接登录
-        DataSource.registerUser(this, "admin", "123456") // 如果已存在，不会重复添加
-        
+
+        FirebaseApp.initializeApp(this) // 初始化 Firebase 服务
         enableEdgeToEdge() // 开启全屏边缘到边缘的沉浸式体验
-        
-        setContent { // 开始设置 Compose 渲染内容
-            ScreenshotofTaskManagerTheme { // 应用项目全局主题
-                Surface(  //一个全新底板容器
-                    modifier = Modifier.fillMaxSize(), // 让容器占满全屏
-                    color = MaterialTheme.colorScheme.background // 使用主题中的背景颜色 好处：切深色模式时自动适配
+
+        setContent {
+            ScreenshotofTaskManagerTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
                 ) {
                     TaskManagerApp() // 加载主导航应用
                 }
@@ -73,33 +62,33 @@ class MainActivity : ComponentActivity() { // MainActivity 类定义
 @Composable
 fun TaskManagerApp() { // 应用主导航函数
     val navController = rememberNavController() // 创建导航控制器
-    NavHost(navController = navController, startDestination = "onboarding") { // 定义导航宿主和起始页
-        composable("onboarding") { // 引导页路由
-            OnboardingScreen(navController = navController) // 渲染引导页
+    NavHost(navController = navController, startDestination = "onboarding") {
+        composable("onboarding") {
+            OnboardingScreen(navController = navController)
         }
-        composable("login") { // 登录页路由
-            LoginScreen(navController = navController) // 渲染登录页
+        composable("login") {
+            LoginScreen(navController = navController)
         }
-        composable("register") { // 注册页路由
-            RegisterScreen(navController = navController) // 渲染注册页
+        composable("register") {
+            RegisterScreen(navController = navController)
         }
-        composable("conversation_list") { // 会话列表页路由
-            MainScreen(mainNavController = navController) // 渲染主界面（包含底部导航） Mainscreen作为主界面
+        composable("conversation_list") {
+            MainScreen(mainNavController = navController)
         }
         composable(
-            route = "conversation_detail/{conversationName}", // 聊天详情路由，带参数 动态路由模板
-            arguments = listOf(navArgument("conversationName") { type = NavType.StringType }) // 定义字符串类型的参数 声明参数列表
-        ) { backStackEntry ->    //返回栈条录
-            val conversationName = backStackEntry.arguments?.getString("conversationName") ?: "" // 取出参数值
-            ConversationDetailScreen(navController = navController, conversationName = conversationName) // 渲染详情页
+            route = "conversation_detail/{otherUserUid}", // 聊天详情路由参数改为对方 UID，方便从云端唯一定位会话
+            arguments = listOf(navArgument("otherUserUid") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val otherUserUid = backStackEntry.arguments?.getString("otherUserUid") ?: ""
+            ConversationDetailScreen(navController = navController, otherUserUid = otherUserUid)
         }
     }
 }
 
-@Preview(showBackground = true) // 预览模式设置
+@Preview(showBackground = true)
 @Composable
-fun AppPreview() { // 预览组件函数
-    ScreenshotofTaskManagerTheme { // 应用主题
-        TaskManagerApp() // 预览整体应用
+fun AppPreview() {
+    ScreenshotofTaskManagerTheme {
+        TaskManagerApp()
     }
 }

@@ -1,6 +1,7 @@
 package com.example.screenshotoftaskmanager.ui // 定义包名
 
 import android.net.Uri // 导入处理图片路径的 Uri 类
+import android.widget.Toast // 导入 Toast，用于显示初始化结果提示
 import androidx.activity.compose.rememberLauncherForActivityResult // 导入 Activity 结果启动器
 import androidx.activity.result.PickVisualMediaRequest // 导入图片选择请求类
 import androidx.activity.result.contract.ActivityResultContracts // 导入结果处理协议
@@ -12,18 +13,22 @@ import androidx.compose.foundation.layout.Column // 导入垂直布局
 import androidx.compose.foundation.layout.Row // 导入水平布局
 import androidx.compose.foundation.layout.Spacer // 导入间距组件
 import androidx.compose.foundation.layout.fillMaxSize // 导入填充全屏修饰符
+import androidx.compose.foundation.layout.fillMaxWidth // 导入填充宽度修饰符
 import androidx.compose.foundation.layout.height // 导入高度修饰符
+import androidx.compose.foundation.layout.width // 导入宽度修饰符
 import androidx.compose.foundation.layout.padding // 导入内边距修饰符
 import androidx.compose.foundation.layout.size // 导入尺寸修饰符
 import androidx.compose.foundation.shape.CircleShape // 导入圆形形状
 import androidx.compose.material.icons.Icons // 导入图标库
 import androidx.compose.material.icons.filled.Edit // 导入铅笔图标
+import androidx.compose.material.icons.filled.Info // 导入信息图标
 import androidx.compose.material3.AlertDialog // 导入对话框组件
 import androidx.compose.material3.Button // 导入按钮组件
 import androidx.compose.material3.ExperimentalMaterial3Api // 导入实验性 API 标记
 import androidx.compose.material3.Icon // 导入图标组件
 import androidx.compose.material3.IconButton // 导入图标按钮组件
 import androidx.compose.material3.MaterialTheme // 导入主题库
+import androidx.compose.material3.OutlinedTextField // 导入输入框组件
 import androidx.compose.material3.Scaffold // 导入脚手架布局
 import androidx.compose.material3.Text // 导入文本组件
 import androidx.compose.material3.TextButton // 导入文本按钮组件
@@ -43,12 +48,30 @@ import androidx.compose.ui.unit.dp // 导入 dp 单位
 import androidx.compose.ui.unit.sp // 导入 sp 单位
 import androidx.navigation.NavController // 导入导航控制器
 import coil.compose.AsyncImage // 导入异步图片加载组件
-import com.example.screenshotoftaskmanager.ui.DataSource      // 导入全局数据源，确保myNickname可用
+import com.example.screenshotoftaskmanager.AuthManager // 导入认证管理工具
+import com.example.screenshotoftaskmanager.CloudChatManager // 导入云端聊天管理器
 
 @OptIn(ExperimentalMaterial3Api::class) // 启用实验性 API
 @Composable // 声明为 UI 组件
 fun ProfileScreen(mainNavController: NavController) { // “我的”屏幕组件
     
+    // 获取当前上下文，用于显示 Toast
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // 读取当前登录用户名，用于判断是否是 admin
+    val currentUsername = AuthManager.getCurrentUsername()
+
+    // 是否为 admin 账号（只有 admin 才显示初始化按钮）
+    val isAdminUser = currentUsername == "admin"
+
+    // 是否正在执行预设聊天上传（用于禁用按钮，防止重复点击）
+    var isInitializing by remember { mutableStateOf(false) }
+
+    // 上传状态文本（展示给管理员）
+    var initStatusText by remember { mutableStateOf("") }
+    // 完整的上传进度日志（所有 onProgress 消息的累积）
+    var uploadLogText by remember { mutableStateOf("") }
+
     // 控制是否显示更换头像的弹窗 显示对话框
     var showDialog by remember { mutableStateOf(false) } // 头像弹窗状态
 
@@ -57,6 +80,9 @@ fun ProfileScreen(mainNavController: NavController) { // “我的”屏幕组�
 
     // 控制是否显示更改个性签名弹窗
     var showSignatureDialog by remember { mutableStateOf(false) } // 个性签名弹窗状态
+
+    // 控制是否显示上传提示对话框
+    var showUploadHintDialog by remember { mutableStateOf(false) } // 上传提示弹窗状态
 
     // 临时昵称输入状态，初始值为当前昵称，显式指定类型为String
     var nicknameInput by remember { mutableStateOf<String>(DataSource.myNickname) } // 昵称输入框内容
@@ -167,13 +193,36 @@ fun ProfileScreen(mainNavController: NavController) { // “我的”屏幕组�
         )
     }
 
+    // ✅ 上传提示对话框逻辑
+    if (showUploadHintDialog) {
+        AlertDialog(
+            onDismissRequest = { showUploadHintDialog = false },
+            title = { Text("预设聊天上传说明") },
+            text = { Text("请先手动注册 xiaoming、xiaohua、daguang，然后再点击上传按钮上传 admin 的预设聊天。\n\n预设消息来自代码里的 CloudChatManager.adminSeedConversations，不是本地 DataSource 聊天缓存。") },
+            confirmButton = {
+                TextButton(onClick = { showUploadHintDialog = false }) {
+                    Text("我知道了")
+                }
+            }
+        )
+    }
+
     Scaffold( // 页面基础结构脚手架
         topBar = {
             TopAppBar(
                 title = { Text("我的") }, // 顶部显示"我的"
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary // 设置背景颜色为深蓝色
-                )
+                ),
+                actions = {
+                    // 在右上角显示当前用户ID
+                    Text(
+                        text = "ID: $currentUsername",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(end = 16.dp).align(Alignment.CenterVertically)
+                    )
+                }
             )
         }
     ) { innerPadding -> // 内容区域，处理顶部栏遮挡
@@ -273,10 +322,103 @@ fun ProfileScreen(mainNavController: NavController) { // “我的”屏幕组�
 
             Spacer(modifier = Modifier.height(16.dp)) // 间距
 
+            // 仅 admin 账号显示"上传预设聊天到云端"按钮
+            if (isAdminUser) {
+                // 在管理员按钮上方显示操作提示icon（点击可查看详细说明）
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("上传预设聊天到云端")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(
+                        onClick = { showUploadHintDialog = true },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Info,
+                            contentDescription = "查看上传说明",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        // 开始上传，先重置状态
+                        isInitializing = true
+                        initStatusText = "正在上传 admin 的预设聊天..."
+                            uploadLogText = "" // 清空之前的日志
+
+                        // 调用云端聊天迁移入口
+                        CloudChatManager.uploadAdminSeedChatsToCloud(
+                            onProgress = { progressMessage ->
+                                // 持续更新状态文本
+                                initStatusText = progressMessage
+                                    // 同时累积到日志里，方便用户看完整过程
+                                    uploadLogText += progressMessage + "\n"
+                            },
+                            onComplete = { success, finalMessage ->
+                                // 上传结束，恢复按钮状态
+                                isInitializing = false
+
+                                // 展示最终结果
+                                initStatusText = finalMessage
+                                    uploadLogText += finalMessage + "\n"
+
+                                // 用 Toast 给出明确反馈
+                                Toast.makeText(
+                                    context,
+                                    if (success) "预设聊天上传完成" else "预设聊天上传未完全成功，请查看状态",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        )
+                    },
+                    enabled = !isInitializing // 初始化期间禁用按钮，防止并发触发
+                ) {
+                    // 按钮文本会根据状态动态变化
+                    Text(if (isInitializing) "正在上传..." else "同步 admin 预设聊天到云端")
+                }
+
+                // 显示当前状态文本
+                if (initStatusText.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(8.dp)) // 与按钮保持间距
+                    Text(
+                        text = initStatusText, // 显示当前初始化状态
+                        fontSize = 13.sp, // 字体稍小，作为状态信息
+                        color = Color.DarkGray // 使用深灰色区分主内容
+                    )
+                }
+
+                // 显示完整的上传日志（卷轴式显示，避免占据整个屏幕）
+                if (uploadLogText.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(8.dp)) // 与状态文本保持间距
+                    androidx.compose.material3.OutlinedTextField(
+                        value = uploadLogText, // 显示完整上传日志
+                        onValueChange = {}, // 只读，不允许编辑
+                        label = { Text("上传日志") }, // 标签
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp), // 固定高度，内部卷轴
+                        readOnly = true, // 设置为只读
+                        enabled = false // 禁用但仍显示内容
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp)) // 与下方退出按钮拉开距离
+            }
+
             Spacer(modifier = Modifier.height(40.dp)) // 间距与按钮之间的距离
 
             // 退出登录按钮
             Button(onClick = {
+                // 先执行 Firebase 退出登录，确保认证态被清理
+                AuthManager.logout()
+
                 mainNavController.navigate("login") { // 导航回登录页
                     popUpTo(mainNavController.graph.startDestinationId) { // 清空所有返回栈
                         inclusive = true // 包含起始页一并清除  保证清空所有返回栈 要注意 栈底和栈顶先来的在底下 然后 pop是从上往下弹出的

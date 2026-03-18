@@ -22,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +32,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(navController: NavController) {     //定义登录屏幕函数
@@ -59,7 +61,9 @@ fun UsernamePasswordLogin(navController: NavController) {
     var username by remember { mutableStateOf("") }     // 保存账号输入框的状态
     var password by remember { mutableStateOf("") }   // 保存密码输入框的状态
     var isLoading by remember { mutableStateOf(false) } // 记录是否正在登录，用于禁用按钮和显示加载状态
+    var loginRequestId by remember { mutableStateOf(0) } // 记录当前登录请求编号，用来忽略已经过期的旧回调
     val context = LocalContext.current           // 获取 Android 上下文，用于显示 Toast 消息
+    val scope = rememberCoroutineScope() // 获取协程作用域，用于启动登录超时倒计时
 
     Column(
         modifier = Modifier
@@ -96,9 +100,23 @@ fun UsernamePasswordLogin(navController: NavController) {
                 
                 // 设置加载状态为 true，禁用按钮并显示加载动画
                 isLoading = true
+                loginRequestId += 1 // 每次点击登录都生成一个新的请求编号
+                val currentRequestId = loginRequestId // 记录本次登录对应的请求编号
+                
+                scope.launch { // 启动一个协程，为本次登录请求添加超时保护
+                    delay(15000) // 最多等待 15 秒，防止网络卡住时页面一直灰掉
+                    if (isLoading && loginRequestId == currentRequestId) { // 只有当前请求仍然有效且仍在加载时才执行超时处理
+                        isLoading = false // 超时后恢复页面可操作状态
+                        Toast.makeText(context, "登录超时，请检查网络或 VPN 后重试", Toast.LENGTH_SHORT).show() // 提示用户当前请求已经超时
+                    }
+                }
                 
                 // 调用 AuthManager 的 login 函数进行 Firebase 身份验证
-                AuthManager.login(username, password) { success, message ->
+                AuthManager.login(username, password) loginCallback@ { success, message ->
+                    if (loginRequestId != currentRequestId) { // 如果这已经不是当前最新的一次登录请求，就直接忽略旧回调
+                        return@loginCallback // 防止超时后的旧回调再次改动界面状态
+                    }
+                    
                     // 登录完成后的回调函数
                     isLoading = false // 设置加载状态为 false，恢复按钮可用
                     
@@ -113,7 +131,7 @@ fun UsernamePasswordLogin(navController: NavController) {
                     }
                 }
             }, enabled = !isLoading) { // 加载时禁用按钮
-                Text("登录") // 按钮文本
+                Text(if (isLoading) "登录中..." else "登录") // 根据加载状态动态显示按钮文本
             }
             Button(onClick = { // 注册按钮点击事件
                 navController.navigate("register") // 导航到注册屏幕

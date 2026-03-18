@@ -1,5 +1,6 @@
 package com.example.screenshotoftaskmanager.ui
 
+import android.widget.Toast
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,14 +38,21 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import com.example.screenshotoftaskmanager.CloudChatManager
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -59,14 +69,123 @@ import kotlin.math.roundToInt
 @OptIn(ExperimentalMaterial3Api::class) // 标记此函数使用了实验性的 Material3 API
 @Composable // 声明这是一个 Jetpack Compose 的可组合函数
 fun ConversationListScreen(navController: NavController) { // 定义会话列表屏幕，接收一个 NavController 用于导航
+    val context = LocalContext.current
+    
+    // 搜索添加好友的状态
+    var showSearchDialog by remember { mutableStateOf(false) }
+    var searchInput by remember { mutableStateOf("") }
+    var searchStatus by remember { mutableStateOf("") }
+    var isSearching by remember { mutableStateOf(false) }
+    var foundUser by remember { mutableStateOf<com.example.screenshotoftaskmanager.User?>(null) }
 
-    // ✅ 给明确类型，避免 items() 推断 T 失败
-    // 使用 remember 记住排序后的会话列表，只有当会话数量或置顶状态变化时才重新计算
-    val sortedConversations: List<Conversation> = remember(       //使用remember函数 计算出key值判断状态是否改变
-        DataSource.conversations.size, // 会话列表的大小
-        DataSource.conversations.map { it.isPinned } // 每个会话的置顶状态  状态改变从而key2改变
-    ) {
-        DataSource.conversations.sortedWith(compareByDescending { it.isPinned }) // 按置顶状态降序排序 sortedwith是排序函数接受一个比较器来进行自定义排序
+    DisposableEffect(Unit) {
+        val registration = CloudChatManager.listenMyConversations(
+            onChange = { cloudConversations ->
+                DataSource.replaceConversations(cloudConversations)
+            },
+            onError = { errorMessage ->
+                Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+            }
+        )
+
+        onDispose {
+            registration?.remove()
+        }
+    }
+
+    val sortedConversations: List<Conversation> = DataSource.conversations.sortedWith(
+        compareByDescending<Conversation> { it.isPinned }
+            .thenByDescending { it.lastTimestamp }
+    )
+
+    // 搜索并添加好友的对话框
+    if (showSearchDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showSearchDialog = false
+                searchInput = ""
+                searchStatus = ""
+                foundUser = null
+                isSearching = false
+            },
+            title = { Text("添加好友") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = searchInput,
+                        onValueChange = { searchInput = it },
+                        label = { Text("输入好友ID") },
+                        enabled = !isSearching,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (searchStatus.isNotEmpty()) {
+                        androidx.compose.material3.Text(
+                            text = searchStatus,
+                            fontSize = 12.sp,
+                            color = if (foundUser != null) Color.Green else Color.Red,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                    if (foundUser != null) {
+                        androidx.compose.material3.Text(
+                            text = "找到用户：${foundUser!!.username}",
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (foundUser != null) {
+                            // 添加好友
+                            isSearching = true
+                            CloudChatManager.createOrUpdateConversation(
+                                otherUserUid = foundUser!!.uid,
+                                otherUsername = foundUser!!.username,
+                                onComplete = { success, message ->
+                                    isSearching = false
+                                    if (success) {
+                                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                        showSearchDialog = false
+                                        searchInput = ""
+                                        searchStatus = ""
+                                        foundUser = null
+                                    } else {
+                                        searchStatus = message
+                                    }
+                                }
+                            )
+                        } else {
+                            // 执行搜索
+                            isSearching = true
+                            CloudChatManager.searchUser(searchInput) { user, message ->
+                                isSearching = false
+                                foundUser = user
+                                searchStatus = message
+                            }
+                        }
+                    },
+                    enabled = !isSearching
+                ) {
+                    Text(if (foundUser != null) "添加好友" else "搜索")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showSearchDialog = false
+                        searchInput = ""
+                        searchStatus = ""
+                        foundUser = null
+                        isSearching = false
+                    }
+                ) {
+                    Text("取消")
+                }
+            }
+        )
     }
 
     Scaffold( // 使用 Material3 的 Scaffold 脚手架布局
@@ -77,35 +196,33 @@ fun ConversationListScreen(navController: NavController) { // 定义会话列表
                     containerColor = MaterialTheme.colorScheme.primary // 设置背景颜色为深蓝色
                 ),
                 actions = { // 定义右侧的操作按钮
-                    IconButton(onClick = { // 添加一个图标按钮
-                        var newFriendNumber = 1 // 初始化新朋友的编号
-                        var newFriendName = "新朋友" // 初始化新朋友的默认名称
-                        while (DataSource.conversations.any { it.name == newFriendName }) { // 循环检查名称是否已存在
-                            newFriendNumber++ // 如果存在，编号加一
-                            newFriendName = "新朋友 $newFriendNumber" // 更新名称
-                        }
-                        DataSource.getMessagesForConversation(newFriendName) // 为新朋友创建一个会话（如果需要）
-                        navController.navigate("conversation_detail/$newFriendName") // 导航到新朋友的会话详情页 根据传入路由地址来跳转到会话详情页
+                    IconButton(onClick = {
+                        // 打开搜索添加好友对话框
+                        showSearchDialog = true
                     }) {
-                        Icon(Icons.Default.Add, contentDescription = "添加新会话") // 设置按钮图标为“添加”，并提供内容描述
+                        Icon(Icons.Default.Add, contentDescription = "添加好友")
                     }
                 }
             )
         }
     ) { innerPadding -> // Scaffold 的内容区域，innerPadding 用于处理 TopAppBar 遮挡
-        LazyColumn( // 使用 LazyColumn 创建一个垂直滚动的列表   懒加载 只有进入可视区域后才可以渲染
+        LazyColumn(
             modifier = Modifier
-                .fillMaxSize() // 填充整个可用空间
-                .padding(innerPadding) // 应用内边距，避免内容被 TopAppBar 遮挡
+                .fillMaxSize()
+                .padding(innerPadding)
         ) {
-            items( // 定义列表项
-                items = sortedConversations, // 列表的数据源是排序后的会话列表
-                key = { it.name } // 为每个列表项设置一个唯一的 key，提高性能和稳定性
-            ) { conversation -> // 遍历每个会话数据
-                ConversationListItem( // 为每个会话创建一个列表项 UI
-                    conversation = conversation, // 传入会话数据
-                    onClick = { // 定义点击事件
-                        navController.navigate("conversation_detail/${conversation.name}") // 点击后导航到对应的会话详情页
+            items(
+                items = sortedConversations,
+                key = { it.otherUserUid.ifBlank { it.name } }
+            ) { conversation ->
+                ConversationListItem(
+                    conversation = conversation,
+                    onClick = {
+                        if (conversation.otherUserUid.isNotBlank()) {
+                            navController.navigate("conversation_detail/${conversation.otherUserUid}")
+                        } else {
+                            Toast.makeText(context, "当前会话缺少用户标识，暂时无法进入", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 )
             }
@@ -250,7 +367,7 @@ fun ConversationListItem( // 定义单个会话列表项的 UI
                     val summaryText = if (conversation.draft.isNotEmpty()) { // 判断是否有草稿
                         "[草稿] ${conversation.draft}" // 如果有，显示草稿内容
                     } else {
-                        conversation.messages.lastOrNull()?.content ?: "还没有消息" // 否则显示最后一条消息，如果没有消息则显示默认文本
+                        conversation.previewText.ifBlank { "还没有消息" } // 否则显示云端同步过来的最后一条消息摘要
                     }
 
                     val summaryColor = if (conversation.draft.isNotEmpty()) { // 判断是否有草稿

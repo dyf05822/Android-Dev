@@ -1,6 +1,5 @@
 package com.example.screenshotoftaskmanager.ui // 定义包名
 
-import android.content.Context // 导入Context用于SharedPreferences
 import androidx.compose.runtime.getValue // 属性读取委托
 import androidx.compose.runtime.mutableStateListOf // 创建可观察列表
 import androidx.compose.runtime.mutableStateOf // 创建可变状态
@@ -25,12 +24,20 @@ class Conversation(
     initialIsPinned: Boolean = false,
     initialUnreadCount: Int = 0,
     initialDraft: String = "",
-    initialAvatar: Any = R.drawable.profile1 // 默认对方头像
+    initialAvatar: Any = R.drawable.profile1, // 默认对方头像
+    initialOtherUserUid: String = "", // 云端会话对应的对方 UID
+    initialChatId: String = "", // 云端 chatId
+    initialPreviewText: String = "", // 列表页预览文本
+    initialLastTimestamp: Long = 0L // 最后一条消息时间
 ) {
     var isPinned by mutableStateOf(initialIsPinned) // 代理置顶状态
     var unreadCount by mutableStateOf(initialUnreadCount) // 代理未读状态
     var draft by mutableStateOf(initialDraft) // 代理草稿状态
     var avatar by mutableStateOf(initialAvatar) // 对方头像状态
+    var otherUserUid by mutableStateOf(initialOtherUserUid) // 记录云端会话对应的对方 UID
+    var chatId by mutableStateOf(initialChatId) // 记录云端 chatId
+    var previewText by mutableStateOf(initialPreviewText) // 会话列表显示的摘要文本
+    var lastTimestamp by mutableStateOf(initialLastTimestamp) // 最后一条消息时间
 }
 
 object DataSource { // 全局单例数据源
@@ -53,78 +60,64 @@ object DataSource { // 全局单例数据源
     // 新增：全局个性签名状态，初始值为“行百里路者半九十”
     var mySignature by mutableStateOf("行百里路者半九十") // 全局个性签名状态
 
-    private val initialConversations = listOf(
-        Conversation(
-            name = "小明",
-            messages = mutableStateListOf(
-                Message(MessageSender.OTHER, "明天干饭去"),
-                Message(MessageSender.ME, "好啊，去哪吃？"),
-                Message(MessageSender.OTHER, "[图片]", type = "image", imageRes = R.drawable.photo1),
-                Message(MessageSender.ME, "这是哪？看起来不错。"),
-                Message(MessageSender.OTHER, "这是那家新开的串串店"), 
-                Message(MessageSender.OTHER, "位置我发你，明天直接在那碰头？") 
-            ),
-            initialUnreadCount = 2,
-            initialIsPinned = true
-        ),
-        Conversation(
-            name = "小华",
-            messages = mutableStateListOf(
-                Message(MessageSender.OTHER, "周末有空吗？一起打球？"),
-                Message(MessageSender.ME, "[图片]", type = "image", imageRes = R.drawable.photo2)
-            ),
-            initialDraft = "待会回..."
-        ),
-        Conversation(
-            name = "大光",
-            messages = mutableStateListOf(
-                Message(MessageSender.OTHER, "在干嘛呢？"),
-                Message(MessageSender.ME, "刚吃完饭，准备休息一下。"),
-                Message(MessageSender.OTHER, "你现在到哪了？")
-            )
-        )
-    )
+    // 会话列表不再预置固定聊天；现在这里仅作为“云端聊天的运行时缓存”
+    val conversations = mutableStateListOf<Conversation>()
 
-    val conversations = mutableStateListOf<Conversation>().apply {
-        addAll(initialConversations)       //所有消息列表
+    // 根据对方 UID 生成稳定头像，保证不同账号登录时仍有一致头像表现
+    fun avatarForUsername(username: String): Int {
+        val safeIndex = (username.hashCode() and Int.MAX_VALUE) % profileResources.size
+        return profileResources[safeIndex]
     }
 
-    fun getConversation(name: String): Conversation {    //根据名字查找聊天
-        return conversations.find { it.name == name } ?: run {
-            val newConv = Conversation(name = name, messages = mutableStateListOf())    //找不到这个聊天就创造一个聊天
-            conversations.add(newConv)
-            newConv
+    // 用云端返回的新列表整体替换本地缓存，并尽量保留已有 UI 状态（草稿、置顶、头像、已加载消息）
+    fun replaceConversations(newConversations: List<Conversation>) {
+        val existingMap = conversations.associateBy { conversation ->
+            conversation.otherUserUid.ifBlank { conversation.name }
+        }
+
+        conversations.clear()
+
+        newConversations.forEach { incomingConversation ->
+            val conversationKey = incomingConversation.otherUserUid.ifBlank { incomingConversation.name }
+            val existingConversation = existingMap[conversationKey]
+
+            if (existingConversation != null) {
+                incomingConversation.isPinned = existingConversation.isPinned
+                incomingConversation.unreadCount = existingConversation.unreadCount
+                incomingConversation.draft = existingConversation.draft
+                incomingConversation.avatar = existingConversation.avatar
+
+                if (existingConversation.messages.isNotEmpty()) {
+                    incomingConversation.messages.clear()
+                    incomingConversation.messages.addAll(existingConversation.messages)
+                }
+            }
+
+            conversations.add(incomingConversation)
         }
     }
 
-    fun getMessagesForConversation(newFriendName: String) {}   //
+    // 通过对方 UID 获取会话；如果本地缓存中不存在，则创建一个占位会话，便于详情页先进入再等待云端数据刷新
+    fun getOrCreateConversation(otherUserUid: String, displayName: String = "未命名用户"): Conversation {
+        return conversations.find { it.otherUserUid == otherUserUid } ?: Conversation(
+            name = displayName,
+            messages = mutableStateListOf(),
+            initialAvatar = avatarForUsername(displayName),
+            initialOtherUserUid = otherUserUid,
+            initialPreviewText = "还没有消息"
+        ).also { conversations.add(it) }
+    }
+
+    // 根据对方 UID 查找会话；如果没有找到则返回 null
+    fun getConversationByOtherUserUid(otherUserUid: String): Conversation? {
+        return conversations.find { it.otherUserUid == otherUserUid }
+    }
+
+    @Suppress("UNUSED_PARAMETER")
+    fun getMessagesForConversation(newFriendName: String) { // 兼容旧调用，当前已切换为云端会话，不再在本地创建固定聊天
+    }
 
     // 聊天内容中可选的图片库（用于发送图片消息，保持 photo1-5 不变）
     val drawableResources = listOf(R.drawable.photo1, R.drawable.photo2, R.drawable.photo3, R.drawable.photo4, R.drawable.photo5)
 
-    // 用户注册函数：检查用户名是否已存在，如果不存在则保存用户名和密码
-    fun registerUser(context: Context, username: String, password: String): Boolean { // 返回注册是否成功
-        val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE) // 获取SharedPreferences实例
-        val key = "username_$username" // 存储键格式：username_用户名
-        if (prefs.contains(key)) { // 如果键已存在，表示用户名已注册
-            return false // 注册失败
-        }
-        prefs.edit().putString(key, password).apply() // 保存密码（明文）
-        return true // 注册成功
-    }
-
-    // 检查用户名是否已注册
-    fun isUserRegistered(context: Context, username: String): Boolean { // 返回是否已注册
-        val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE) // 获取SharedPreferences实例
-        val key = "username_$username" // 存储键格式
-        return prefs.contains(key) // 检查键是否存在
-    }
-
-    // 用户登录函数：检查用户名和密码是否匹配
-    fun loginUser(context: Context, username: String, password: String): Boolean { // 返回登录是否成功
-        val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE) // 获取SharedPreferences实例
-        val key = "username_$username" // 存储键格式
-        val storedPassword = prefs.getString(key, null) // 获取存储的密码
-        return storedPassword == password // 比较密码
-    }
 }
