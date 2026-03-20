@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size // 导入尺寸
 import androidx.compose.foundation.layout.width // 导入宽度
 import androidx.compose.foundation.lazy.LazyColumn // 导入列表
 import androidx.compose.foundation.lazy.items // 导入项
+import androidx.compose.foundation.lazy.itemsIndexed // 导入带索引的 LazyColumn item 构建
 import androidx.compose.foundation.lazy.rememberLazyListState // 导入列表状态
 import androidx.compose.foundation.shape.CircleShape // 导入圆形
 import androidx.compose.foundation.shape.RoundedCornerShape // 导入圆角
@@ -55,6 +56,7 @@ import androidx.compose.ui.layout.ContentScale // 导入缩放
 import androidx.compose.ui.platform.LocalContext // 导入获取当前上下文的函数
 import androidx.compose.ui.text.input.TextFieldValue // 导入输入框值
 import androidx.compose.ui.unit.dp // 导入 dp
+import androidx.compose.ui.unit.sp // 导入 sp（可扩展像素）
 import androidx.navigation.NavController // 导入导航控制器
 import coil.compose.AsyncImage // 导入异步图片加载
 import com.example.screenshotoftaskmanager.CloudChatManager // 导入云端聊天管理器
@@ -62,11 +64,18 @@ import kotlinx.coroutines.launch // 导入协程启动
 
 @OptIn(ExperimentalMaterial3Api::class) // 启用实验性 API
 @Composable // 声明可组合函数
-fun ConversationDetailScreen(navController: NavController, otherUserUid: String) { // 详情页入口，参数改为对方 UID
+fun ConversationDetailScreen(navController: NavController, otherUserUid: String) { // 详情页入口，参数改为对方 UID（或群聊 ID）
     val context = LocalContext.current // 获取当前 Android 上下文，用于位置请求和 Toast
     val conversation = DataSource.getOrCreateConversation(otherUserUid, otherUserUid) // 获取或创建当前运行时会话对象
     val messages = conversation.messages // 读取当前会话消息列表
     val scope = rememberCoroutineScope() // 获取协程范围  用于启动天气请求等异步逻辑
+
+    // 聊天目标 ID：群聊用 chatId，一对一用对方 UID
+    val conversationKey = if (conversation.chatType == "group" && conversation.chatId.isNotBlank()) {
+        conversation.chatId
+    } else {
+        otherUserUid
+    }
 
     // 定位权限申请器
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -81,12 +90,12 @@ fun ConversationDetailScreen(navController: NavController, otherUserUid: String)
     )
 
     // 进入会话时清空未读数
-    LaunchedEffect(otherUserUid) {
+    LaunchedEffect(conversationKey) {
         conversation.unreadCount = 0
     }
 
     // 输入框状态，初始值来自草稿
-    var textState by remember(otherUserUid) { mutableStateOf(TextFieldValue(conversation.draft)) }
+    var textState by remember(conversationKey) { mutableStateOf(TextFieldValue(conversation.draft)) }
 
     // 更多选项显示开关
     var showExtraOptions by remember { mutableStateOf(false) }
@@ -105,7 +114,7 @@ fun ConversationDetailScreen(navController: NavController, otherUserUid: String)
         contract = ActivityResultContracts.PickVisualMedia(),
         onResult = { uri: Uri? ->
             uri?.let {
-                CloudChatManager.sendMessage(otherUserUid, "[图片]") { success, message ->
+                CloudChatManager.sendMessage(conversationKey, "[图片]") { success, message ->
                     if (!success) {
                         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                     }
@@ -126,11 +135,11 @@ fun ConversationDetailScreen(navController: NavController, otherUserUid: String)
     )
 
     // 页面展示时实时监听云端消息，并同步回 DataSource 的运行时会话缓存中
-    DisposableEffect(otherUserUid) {
+    DisposableEffect(conversationKey) {
         val registration = CloudChatManager.listenMessagesForConversation(
-            otherUserUid = otherUserUid,
+            otherUserUid = conversationKey,
             onChange = { cloudMessages ->
-                val latestConversation = DataSource.getOrCreateConversation(otherUserUid, conversation.name)
+                val latestConversation = DataSource.getOrCreateConversation(conversationKey, conversation.name)
                 latestConversation.messages.clear()
                 latestConversation.messages.addAll(cloudMessages)
                 latestConversation.previewText = cloudMessages.lastOrNull()?.content ?: "还没有消息"
@@ -169,7 +178,7 @@ fun ConversationDetailScreen(navController: NavController, otherUserUid: String)
             },
             dismissButton = {
                 TextButton(onClick = {
-                    CloudChatManager.sendMessage(otherUserUid, "[图片]") { success, message ->
+                    CloudChatManager.sendMessage(conversationKey, "[图片]") { success, message ->
                         if (!success) {
                             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                         }
@@ -216,7 +225,24 @@ fun ConversationDetailScreen(navController: NavController, otherUserUid: String)
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(conversation.name) },
+                // 根据聊天类型显示不同的标题
+                title = { 
+                    // 如果是群聊，显示群名 + 成员数
+                    if (conversation.chatType == "group") {
+                        Column {
+                            // ✅ 群名为空时显示默认值
+                            Text(conversation.groupName.ifBlank { "群聊" })
+                            Text(
+                                // ✅ 使用真实的 participants 列表，而不是消息发送者数
+                                text = "成员数: ${conversation.participants.size}",
+                                fontSize = 12.sp
+                            )
+                        }
+                    } else {
+                        // 如果是一对一，显示用户名
+                        Text(conversation.name)
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -249,7 +275,7 @@ fun ConversationDetailScreen(navController: NavController, otherUserUid: String)
                     Spacer(modifier = Modifier.width(8.dp))
                     IconButton(onClick = {
                         if (textState.text.isNotEmpty()) {
-                            CloudChatManager.sendMessage(otherUserUid, textState.text) { success, message ->
+                            CloudChatManager.sendMessage(conversationKey, textState.text) { success, message ->
                                 if (success) {
                                     textState = TextFieldValue("")
                                     conversation.draft = ""
@@ -281,7 +307,7 @@ fun ConversationDetailScreen(navController: NavController, otherUserUid: String)
                                 if (location != null) {
                                     val adcode = WeatherRepository.getCityCodeByLocation(location.longitude, location.latitude)
                                     val realWeather = WeatherRepository.fetchWeather(adcode)
-                                    CloudChatManager.sendMessage(otherUserUid, realWeather, type = "weather") { success, message ->
+                                    CloudChatManager.sendMessage(conversationKey, realWeather, type = "weather") { success, message ->
                                         if (!success) {
                                             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                                         }
@@ -294,7 +320,7 @@ fun ConversationDetailScreen(navController: NavController, otherUserUid: String)
                                         )
                                     )
                                     val defaultWeather = WeatherRepository.fetchWeather("110000")
-                                    CloudChatManager.sendMessage(otherUserUid, "[定位失败，默认北京] $defaultWeather", type = "weather") { success, message ->
+                                    CloudChatManager.sendMessage(conversationKey, "[定位失败，默认北京] $defaultWeather", type = "weather") { success, message ->
                                         if (!success) {
                                             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                                         }
@@ -306,7 +332,7 @@ fun ConversationDetailScreen(navController: NavController, otherUserUid: String)
                 }
             }
         }
-    ) { innerPadding ->
+        ) { innerPadding ->
         LazyColumn(
             state = listState,
             modifier = Modifier
@@ -314,15 +340,24 @@ fun ConversationDetailScreen(navController: NavController, otherUserUid: String)
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
-            items(messages) { message ->
-                MessageBubble(message = message, otherAvatar = conversation.avatar)
+            // 移除自定义 key，使用默认索引防止重复 key 闪退
+            itemsIndexed(messages) { _, message ->
+                MessageBubble(
+                    message = message,
+                    otherAvatar = conversation.avatar,
+                    conversation = conversation
+                )
             }
         }
     }
 }
 
 @Composable
-fun MessageBubble(message: Message, otherAvatar: Any) { // 添加对方头像参数
+fun MessageBubble(
+    message: Message,
+    otherAvatar: Any,
+    conversation: Conversation // 添加会话参数
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -340,24 +375,39 @@ fun MessageBubble(message: Message, otherAvatar: Any) { // 添加对方头像参
             )
             Spacer(modifier = Modifier.width(8.dp))
         }
-        Box(
-            modifier = Modifier
-                .background(
-                    if (message.sender == MessageSender.ME) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
-                    shape = RoundedCornerShape(8.dp)
-                )
-                .padding(12.dp)
+        Column(
+            modifier = Modifier.weight(1f, fill = false)
         ) {
-            when (message.type) {
-                "text" -> Text(text = message.content)
-                "image" -> AsyncImage(
-                    model = message.imageUri ?: message.imageRes,
-                    contentDescription = "Image",
-                    modifier = Modifier.size(150.dp),
-                    contentScale = ContentScale.Crop
+            // 群聊中显示发送者名字
+            if (conversation.chatType == "group" && message.sender == MessageSender.OTHER) {
+                // ✅ 发送者名字为空时显示 UID 或默认值
+                val displayName = message.senderName.ifBlank { "未知用户" }
+                Text(
+                    text = displayName,
+                    fontSize = 12.sp,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(bottom = 4.dp)
                 )
-                "weather" -> Text(text = message.content)
-                else -> Text(text = message.content)
+            }
+            Box(
+                modifier = Modifier
+                    .background(
+                        if (message.sender == MessageSender.ME) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .padding(12.dp)
+            ) {
+                when (message.type) {
+                    "text" -> Text(text = message.content)
+                    "image" -> AsyncImage(
+                        model = message.imageUri ?: message.imageRes,
+                        contentDescription = "Image",
+                        modifier = Modifier.size(150.dp),
+                        contentScale = ContentScale.Crop
+                    )
+                    "weather" -> Text(text = message.content)
+                    else -> Text(text = message.content)
+                }
             }
         }
         if (message.sender == MessageSender.ME) {

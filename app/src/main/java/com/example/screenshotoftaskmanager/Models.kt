@@ -4,17 +4,37 @@ import com.google.firebase.firestore.PropertyName // 导入Firestore属性注解
 
 // ================== 聊天会话数据类 ==================
 /**
- * Chat 数据类：表示两个用户之间的聊天会话
+ * Chat 数据类：表示聊天会话（支持一对一和群聊）
  * 这个类用于存储在 Firestore 的 chats 集合中
  * 结构：chats/{chatId}
  */
 data class Chat(
-    // 聊天会话的唯一标识符（根据两个用户的 UID 生成，确保唯一性）
+    // 聊天会话的唯一标识符（一对一时由两个 UID 生成，群聊时为 UUID）
     var chatId: String = "",
     
-    // 参与这个聊天的用户 UID 列表（通常包含两个用户）
+    // 聊天类型：'private' 表示一对一，'group' 表示群聊
+    @PropertyName("chatType")
+    var chatType: String = "private",
+    
+    // 群聊的名称（一对一时为空）
+    @PropertyName("groupName")
+    var groupName: String = "",
+    
+    // 群聊的头像 URL（一对一时为空）
+    @PropertyName("groupAvatar")
+    var groupAvatar: String = "",
+    
+    // 参与这个聊天的用户 UID 列表（一对一时包含 2 个用户，群聊时可以是多个）
     @PropertyName("participants")
     var participants: List<String> = emptyList(),
+
+    // 群聊的创建者/群主 UID（一对一时为空）
+    @PropertyName("owner")
+    var owner: String = "",
+    
+    // 群聊创建时的时间戳（一对一时为 0）
+    @PropertyName("createdAt")
+    var createdAt: Long = 0L,
     
     // 聊天中的最后一条消息内容（用于列表显示预览）
     @PropertyName("lastMessage")
@@ -26,7 +46,11 @@ data class Chat(
     
     // 最后一条消息的发送者 UID（可选，用于显示"谁发送了最后一条消息"）
     @PropertyName("lastSenderId")
-    var lastSenderId: String = ""
+    var lastSenderId: String = "",
+    
+    // 最后一条消息的发送者名称（用于群聊显示）
+    @PropertyName("lastSenderName")
+    var lastSenderName: String = ""
 )
 
 // ================== 单条消息数据类 ==================
@@ -101,7 +125,10 @@ object ChatUtils {
      * getOtherUserId(chat, "userB") // 返回 "userA"
      */
     fun getOtherUserId(chat: Chat, currentUid: String): String {
-        // 从参与者列表中找到第一个不等于当前用户的 UID
+        // 群聊没有“对方”；防御性返回空避免误用群聊 ID
+        if (chat.chatType == "group") return ""
+        // 一对一场景下兜底：需要至少 2 人才能取到另一方
+        if (chat.participants.size < 2) return ""
         return chat.participants.firstOrNull { it != currentUid } ?: ""
     }
 }
@@ -126,4 +153,3 @@ data class User(
     @PropertyName("createdAt")
     var createdAt: Long = 0L
 )
-

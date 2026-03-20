@@ -1,8 +1,8 @@
 package com.example.screenshotoftaskmanager
 
-import androidx.compose.runtime.mutableStateListOf
 import android.os.Handler
 import android.os.Looper
+import android.util.Log // 添加日志导入
 import com.example.screenshotoftaskmanager.ui.Conversation
 import com.example.screenshotoftaskmanager.ui.DataSource
 import com.example.screenshotoftaskmanager.ui.Message as UiMessage
@@ -12,6 +12,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.SetOptions
 import java.util.concurrent.atomic.AtomicBoolean
+import androidx.compose.runtime.mutableStateListOf
 
 // 云端聊天管理器：负责聊天列表监听、消息监听、发送消息、上传 admin 的预设聊天种子数据
 object CloudChatManager {
@@ -25,6 +26,14 @@ object CloudChatManager {
     // 使用动态 getter 获取 Firestore，避免静态字段持有 Context 触发泄漏告警
     private val db: FirebaseFirestore
         get() = FirebaseFirestore.getInstance()
+
+    // 统一推断聊天是否为群聊，避免 chatType 字段被错误覆盖后走错分支
+    private fun isGroupConversation(chat: Chat): Boolean {
+        return chat.chatType.equals("group", ignoreCase = true) ||
+            chat.chatId.startsWith("group_") ||
+            chat.owner.isNotBlank() ||
+            chat.createdAt > 0L
+    }
 
     // 预设聊天中的单条种子消息
     private data class SeedMessage(
@@ -108,9 +117,55 @@ object CloudChatManager {
                     return@addSnapshotListener
                 }
 
-                val chats = snapshot?.documents
-                    ?.mapNotNull { document -> document.toObject(Chat::class.java) }
-                    ?: emptyList()
+                val chats = snapshot?.documents?.mapNotNull { document ->
+                    try {
+                        // 安全地将 Firestore 文档转换为 Chat 对象
+                        val chat = document.toObject(Chat::class.java)
+                        if (chat == null) {
+                            Log.w("CloudChatManager", "Chat 对象为 null，文档数据: ${document.data}")
+                            return@mapNotNull null
+                        }
+                        
+                        // 验证必要字段
+                        if (chat.chatId.isBlank()) {
+                            Log.w("CloudChatManager", "Chat ID 为空")
+                            return@mapNotNull null
+                        }
+                        
+                        // ✅ 防御性修复：优先通过结构信息推断群聊，避免 group_ 文档被当成私聊
+                        val inferredGroupChat = isGroupConversation(chat)
+                        val normalizedType = if (inferredGroupChat) "group" else "private"
+                        if (chat.chatType != normalizedType) {
+                            Log.w(
+                                "CloudChatManager",
+                                "🔧 检测到数据不一致：chatId=${chat.chatId}, 原chatType='${chat.chatType}', 修正为 '$normalizedType'"
+                            )
+                            chat.chatType = normalizedType
+                        }
+                        
+                        // 检查 participants 字段
+                        if (chat.participants.isEmpty()) {
+                            Log.w("CloudChatManager", "Participants 为空，chatId: ${chat.chatId}, chatType: ${chat.chatType}")
+                            // 对于群聊，participants 不应该为空，跳过这条记录
+                            if (chat.chatType == "group") {
+                                Log.w("CloudChatManager", "❌ 群聊 ${chat.chatId} 的 participants 为空，跳过此记录")
+                                return@mapNotNull null
+                            }
+                        }
+                        
+                        // ✅ 额外验证：群聊必须有非空的 groupName
+                        if (chat.chatType == "group" && chat.groupName.isBlank()) {
+                            Log.w("CloudChatManager", "⚠️ 群聊 ${chat.chatId} 的 groupName 为空，使用默认值")
+                            chat.groupName = "群聊"
+                        }
+                        
+                        chat // 返回有效的 chat 对象
+                    } catch (e: Exception) {
+                        // 捕获序列化异常
+                        Log.e("CloudChatManager", "将 Firestore 文档转换为 Chat 失败: ${e.message}", e)
+                        null
+                    }
+                } ?: emptyList()
 
                 if (chats.isEmpty()) {
                     onChange(emptyList())
@@ -118,7 +173,8 @@ object CloudChatManager {
                 }
 
                 val otherUserIds = chats
-                    .map { chat -> ChatUtils.getOtherUserId(chat, currentUid) }
+                    .filter { chat -> !isGroupConversation(chat) } // ✅ 只处理一对一聊天，群聊不需要查询用户名
+                    .mapNotNull { chat -> ChatUtils.getOtherUserId(chat, currentUid) }
                     .filter { otherUserId -> otherUserId.isNotBlank() }
                     .toSet()
 
@@ -126,24 +182,65 @@ object CloudChatManager {
                     val conversations = chats
                         .sortedByDescending { chat -> chat.lastTimestamp }
                         .mapNotNull { chat ->
-                            val otherUserUid = ChatUtils.getOtherUserId(chat, currentUid)
+                            try {
+                                // 判断聊天类型：群聊或一对一
+                                val isGroupChat = isGroupConversation(chat) // 检查是否为群聊
+                                
+                                if (isGroupChat) { // 如果是群聊
+                                    // 检查群名是否为空，如果为空则使用默认名称
+                                    val groupName = chat.groupName.ifBlank { "群聊" } // ✅ 添加默认名称
+                                    val previewText = chat.lastMessage.ifBlank { "还没有消息" }
+                                    
+                                    // ✅ 严格验证：确保 groupName 不是成员名而是真实的群名
+                                    if (chat.groupName.isBlank()) {
+                                        Log.w("CloudChatManager", "⚠️ 警告：群聊 chatId=${chat.chatId} 的 groupName 为空，使用默认值")
+                                    }
+                                    
+                                    Log.d("CloudChatManager", "✅ 加载群聊：chatId=${chat.chatId}, groupName=$groupName, participants=${chat.participants.size}人, " +
+                                        "chatType=${chat.chatType}, owner=${chat.owner}")
+                                    
+                                    Conversation(
+                                        name = groupName, // 使用检查后的群聊名称 - 绝对不能是成员名
+                                        messages = mutableStateListOf(),
+                                        initialAvatar = DataSource.avatarForUsername(groupName), // 用群名生成头像
+                                        initialOtherUserUid = "", // 群聊无对方 UID
+                                        initialChatId = chat.chatId,
+                                        initialPreviewText = previewText,
+                                        initialLastTimestamp = chat.lastTimestamp,
+                                        initialChatType = "group", // 设置为群聊
+                                        initialGroupName = groupName, // 设置群名 - 和 name 保持一致
+                                        initialParticipants = chat.participants // ✅ 传入真实的成员列表
+                                    )
+                                } else { // 如果是一对一聊天
+                                    val otherUserUid = ChatUtils.getOtherUserId(chat, currentUid)
 
-                            if (otherUserUid.isBlank()) {
-                                return@mapNotNull null
+                                    if (otherUserUid.isBlank()) {
+                                        Log.w("CloudChatManager", "⚠️ 一对一聊天无法获取对方UID: ${chat.chatId}")
+                                        return@mapNotNull null
+                                    }
+
+                                    val otherUsername = usernameMap[otherUserUid] ?: otherUserUid
+                                    val previewText = chat.lastMessage.ifBlank { "还没有消息" }
+
+                                    Log.d("CloudChatManager", "✅ 加载私聊：chatId=${chat.chatId}, username=$otherUsername, otherUserUid=$otherUserUid")
+
+                                    Conversation(
+                                        name = otherUsername,
+                                        messages = mutableStateListOf(),
+                                        initialAvatar = DataSource.avatarForUsername(otherUsername),
+                                        initialOtherUserUid = otherUserUid,
+                                        initialChatId = chat.chatId,
+                                        initialPreviewText = previewText,
+                                        initialLastTimestamp = chat.lastTimestamp,
+                                        initialChatType = "private", // 设置为一对一
+                                        initialGroupName = "" // 一对一时无群名
+                                    )
+                                }
+                            } catch (e: Exception) {
+                                // 捕获异常防止闪退
+                                Log.e("CloudChatManager", "加载会话失败: ${e.message}", e)
+                                null
                             }
-
-                            val otherUsername = usernameMap[otherUserUid] ?: otherUserUid
-                            val previewText = chat.lastMessage.ifBlank { "还没有消息" }
-
-                            Conversation(
-                                name = otherUsername,
-                                messages = mutableStateListOf(),
-                                initialAvatar = DataSource.avatarForUsername(otherUsername),
-                                initialOtherUserUid = otherUserUid,
-                                initialChatId = chat.chatId,
-                                initialPreviewText = previewText,
-                                initialLastTimestamp = chat.lastTimestamp
-                            )
                         }
 
                     onChange(conversations)
@@ -151,9 +248,9 @@ object CloudChatManager {
             }
     }
 
-    // 监听某个会话的消息列表
+    // 监听某个会话的消息列表（支持群聊和一对一）
     fun listenMessagesForConversation(
-        otherUserUid: String,
+        otherUserUid: String, // 参数名保持不变，但实际可以是 chatId（群聊）或 otherUserUid（一对一）
         onChange: (List<UiMessage>) -> Unit,
         onError: (String) -> Unit = { _ -> }
     ): ListenerRegistration? {
@@ -164,7 +261,15 @@ object CloudChatManager {
             return null
         }
 
-        val chatId = ChatUtils.getChatId(currentUid, otherUserUid)
+        // 统一解析 chatId：群聊直接用传入 ID；如果已是 chatId（包含当前用户且有分隔符）也直接使用
+        val chatId = when {
+            otherUserUid.startsWith("group_") -> otherUserUid
+            otherUserUid.contains("_") && otherUserUid.split("_").size == 2 && otherUserUid.split("_").contains(currentUid) -> otherUserUid
+            else -> ChatUtils.getChatId(currentUid, otherUserUid)
+        }
+
+        // 缓存用户名映射（用于获取发送者的用户名）
+        val usernameCache = mutableMapOf<String, String>()
 
         return db.collection("chats")
             .document(chatId)
@@ -179,10 +284,22 @@ object CloudChatManager {
                 val uiMessages = snapshot?.documents
                     ?.mapNotNull { document -> document.toObject(Message::class.java) }
                     ?.map { cloudMessage ->
+                        // 获取发送者的用户名（用于群聊显示）
+                        val senderName = if (cloudMessage.senderId == currentUid) {
+                            auth.currentUser?.email?.substringBefore("@") ?: "我" // 我的用户名
+                        } else {
+                            // 尝试从缓存获取，如果没有则从 Firestore 查询
+                            usernameCache.getOrElse(cloudMessage.senderId) {
+                                // 同步查询获取用户名（建议后续优化为异步）
+                                cloudMessage.senderId // 暂时使用 UID，待优化
+                            }
+                        }
+                        
                         UiMessage(
                             sender = if (cloudMessage.senderId == currentUid) MessageSender.ME else MessageSender.OTHER,
                             content = cloudMessage.text,
-                            type = if (cloudMessage.type == "weather") "weather" else "text"
+                            type = if (cloudMessage.type == "weather") "weather" else "text",
+                            senderName = senderName // 添加发送者名字
                         )
                     }
                     ?: emptyList()
@@ -191,9 +308,9 @@ object CloudChatManager {
             }
     }
 
-    // 发送消息到云端，并同步更新 chats/{chatId} 的摘要信息
+    // 发送消息到云端，并同步更新 chats/{chatId} 的摘要信息（支持群聊和一对一）
     fun sendMessage(
-        otherUserUid: String,
+        otherUserUid: String, // 参数名保持不变，但实际可以是 chatId（群聊）或 otherUserUid（一对一）
         text: String,
         type: String = "text",
         onComplete: (Boolean, String) -> Unit
@@ -210,35 +327,93 @@ object CloudChatManager {
             return
         }
 
-        val chatId = ChatUtils.getChatId(currentUid, otherUserUid)
+        // 统一解析 chatId：优先使用显式群聊/现成 chatId，其次计算一对一 chatId
+        val chatId = when {
+            otherUserUid.startsWith("group_") -> otherUserUid
+            otherUserUid.contains("_") && otherUserUid.split("_").size == 2 && otherUserUid.split("_").contains(currentUid) -> otherUserUid
+            else -> ChatUtils.getChatId(currentUid, otherUserUid)
+        }
+
         val timestamp = System.currentTimeMillis()
         val cloudMessage = Message(
             senderId = currentUid,
-            receiverId = otherUserUid,
+            receiverId = otherUserUid, // 群聊时这个字段可能是群 ID，但不影响功能
             text = text,
             timestamp = timestamp,
             type = type
         )
-        val chatSummary = Chat(
-            chatId = chatId,
-            participants = listOf(currentUid, otherUserUid),
-            lastMessage = text,
-            lastTimestamp = timestamp,
-            lastSenderId = currentUid
-        )
+        
+        // 获取当前 chat 文档，仅用于补齐缺失字段；摘要更新只写增量字段，避免把群聊覆盖成私聊
         val chatRef = db.collection("chats").document(chatId)
         val messageRef = chatRef.collection("messages").document()
-        val batch = db.batch()
 
-        batch.set(chatRef, chatSummary, SetOptions.merge())
-        batch.set(messageRef, cloudMessage)
+        chatRef
+            .get()
+            .addOnSuccessListener { chatDoc ->
+                val docChat = chatDoc.toObject(Chat::class.java)
+                val isGroupChat = (docChat?.let { isGroupConversation(it) } == true) || chatId.startsWith("group_")
 
-        batch.commit()
-            .addOnSuccessListener {
-                onComplete(true, "发送成功")
+                @Suppress("UNCHECKED_CAST")
+                val docParticipants = (chatDoc.get("participants") as? List<String>).orEmpty()
+                val participants = when {
+                    docParticipants.isNotEmpty() -> docParticipants
+                    isGroupChat -> listOf(currentUid)
+                    else -> listOf(currentUid, otherUserUid)
+                }.distinct()
+
+                val summaryUpdate = hashMapOf<String, Any>(
+                    "chatId" to chatId,
+                    "lastMessage" to text,
+                    "lastTimestamp" to timestamp,
+                    "lastSenderId" to currentUid
+                )
+
+                if (!chatDoc.exists()) {
+                    summaryUpdate["chatType"] = if (isGroupChat) "group" else "private"
+                    summaryUpdate["participants"] = participants
+                } else {
+                    if (docParticipants.isEmpty()) {
+                        summaryUpdate["participants"] = participants
+                    }
+                    if (isGroupChat && !chatDoc.getString("chatType").equals("group", ignoreCase = true)) {
+                        summaryUpdate["chatType"] = "group"
+                    }
+                }
+
+                val batch = db.batch()
+                batch.set(chatRef, summaryUpdate, SetOptions.merge())
+                batch.set(messageRef, cloudMessage)
+
+                batch.commit()
+                    .addOnSuccessListener {
+                        onComplete(true, "发送成功")
+                    }
+                    .addOnFailureListener { exception ->
+                        onComplete(false, exception.message ?: "发送失败")
+                    }
             }
-            .addOnFailureListener { exception ->
-                onComplete(false, exception.message ?: "发送失败")
+            .addOnFailureListener {
+                val isGroupChat = chatId.startsWith("group_")
+                val summaryUpdate = hashMapOf<String, Any>(
+                    "chatId" to chatId,
+                    "chatType" to if (isGroupChat) "group" else "private",
+                    "participants" to if (isGroupChat) listOf(currentUid) else listOf(currentUid, otherUserUid),
+                    "lastMessage" to text,
+                    "lastTimestamp" to timestamp,
+                    "lastSenderId" to currentUid
+                )
+
+                val batch = db.batch()
+                batch.set(chatRef, summaryUpdate, SetOptions.merge())
+                batch.set(messageRef, cloudMessage)
+
+                batch.commit()
+                    .addOnSuccessListener {
+                        onComplete(true, "发送成功")
+                    }
+                    .addOnFailureListener { newException ->
+                        onComplete(false, newException.message ?: "发送失败")
+                    }
             }
     }
 
@@ -543,5 +718,81 @@ object CloudChatManager {
                 onComplete(false, exception.message ?: "添加好友失败")
             }
     }
-}
 
+    // 创建群聊方法
+    fun createGroupChat(
+        groupName: String, // 群聊名称
+        memberUids: List<String>, // 群成员 UID 列表（不包括群主自己）
+        onComplete: (Boolean, String) -> Unit // 完成回调（成功标志和消息）
+    ) {
+        val currentUid = auth.currentUser?.uid // 获取当前登录用户 UID（群主）
+        if (currentUid.isNullOrBlank()) { // 如果当前用户未登录
+            onComplete(false, "当前未登录") // 返回失败
+            return // 终止函数
+        }
+
+        if (groupName.isBlank()) { // 如果群名为空
+            onComplete(false, "群聊名称不能为空") // 返回失败
+            return // 终止函数
+        }
+
+        if (memberUids.isEmpty()) { // 如果成员列表为空
+            onComplete(false, "群聊至少需要一个成员") // 返回失败
+            return // 终止函数
+        }
+
+        // 生成群聊唯一 ID（使用 UUID 或基于成员 UID hash）
+        val groupId = "group_${System.currentTimeMillis()}_${(0..999).random()}" // 生成唯一群 ID
+        val timestamp = System.currentTimeMillis() // 获取当前时间戳
+
+        // 构建完整的参与者列表（包括群主和所有成员）
+        val allParticipants = listOf(currentUid) + memberUids // ✅ 创建成员列表（包括群主）
+
+        // 构建群聊数据对象
+        val groupChat = Chat(
+            chatId = groupId, // 群聊唯一 ID
+            chatType = "group", // 设置聊天类型为群聊
+            groupName = groupName, // 设置群名称
+            groupAvatar = "", // 群头像（暂时为空，可后续支持上传）
+            participants = allParticipants, // ✅ 设置参与者列表（非空）
+            owner = currentUid, // 设置群主为当前用户
+            createdAt = timestamp, // 记录群聊创建时间
+            lastMessage = "", // 初始时没有消息
+            lastTimestamp = timestamp, // 最后消息时间为创建时间
+            lastSenderId = currentUid, // 最后消息发送者为群主
+            lastSenderName = "" // 初始为空
+        )
+
+        // ✅ 只需要一次写入，无需循环！所有成员的 participants 都相同
+        val batch = db.batch()
+        batch.set(
+            db.collection("chats").document(groupId), // 群聊文档
+            groupChat // 群聊数据
+        )
+
+        // 提交批量操作
+        batch.commit()
+            .addOnSuccessListener { _ ->
+                Log.d("CloudChatManager", "群聊创建成功: $groupId，参与者: $allParticipants") // ✅ 添加调试日志
+                // 本地预先添加群聊会话，避免列表因云端延迟被其他会话覆盖
+                val newConversation = Conversation(
+                    name = groupName.ifBlank { "群聊" },
+                    messages = mutableStateListOf(),
+                    initialAvatar = DataSource.avatarForUsername(groupName.ifBlank { "群聊" }),
+                    initialOtherUserUid = "",
+                    initialChatId = groupId,
+                    initialPreviewText = "还没有消息",
+                    initialLastTimestamp = timestamp,
+                    initialChatType = "group",
+                    initialGroupName = groupName,
+                    initialParticipants = allParticipants
+                )
+                DataSource.replaceConversations(DataSource.conversations + newConversation)
+                onComplete(true, "群聊 '$groupName' 创建成功") // 返回成功
+            }
+            .addOnFailureListener { exception ->
+                Log.e("CloudChatManager", "创建群聊失败: ${exception.message}") // ✅ 添加错误日志
+                onComplete(false, exception.message ?: "创建群聊失败") // 返回失败和错误信息
+            }
+    }
+}

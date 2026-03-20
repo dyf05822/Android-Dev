@@ -1,3 +1,4 @@
+@file:Suppress("UNUSED_VALUE") // 文件内多处状态重置用于副作用，抑制“值未被读取”警告
 package com.example.screenshotoftaskmanager.ui
 
 import android.widget.Toast
@@ -24,9 +25,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.MoreVert // 更多选项图标
+import androidx.compose.material3.DropdownMenu // 下拉菜单组件
+import androidx.compose.material3.DropdownMenuItem // 下拉菜单选项组件
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
@@ -42,6 +45,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
@@ -78,6 +82,9 @@ fun ConversationListScreen(navController: NavController) { // 定义会话列表
     var isSearching by remember { mutableStateOf(false) }
     var foundUser by remember { mutableStateOf<com.example.screenshotoftaskmanager.User?>(null) }
 
+    // 下拉菜单显示状态
+    var showMenuDropdown by remember { mutableStateOf(false) } // true 表示展开菜单
+
     DisposableEffect(Unit) {
         val registration = CloudChatManager.listenMyConversations(
             onChange = { cloudConversations ->
@@ -102,11 +109,14 @@ fun ConversationListScreen(navController: NavController) { // 定义会话列表
     if (showSearchDialog) {
         AlertDialog(
             onDismissRequest = {
-                showSearchDialog = false
-                searchInput = ""
-                searchStatus = ""
-                foundUser = null
-                isSearching = false
+                @Suppress("UNUSED_VALUE") // 重置状态值仅用于副作用，忽略“未读取”警告
+                run {
+                    showSearchDialog = false
+                    searchInput = ""
+                    searchStatus = ""
+                    foundUser = null
+                    isSearching = false
+                }
             },
             title = { Text("添加好友") },
             text = {
@@ -119,7 +129,7 @@ fun ConversationListScreen(navController: NavController) { // 定义会话列表
                         modifier = Modifier.fillMaxWidth()
                     )
                     if (searchStatus.isNotEmpty()) {
-                        androidx.compose.material3.Text(
+                        Text(
                             text = searchStatus,
                             fontSize = 12.sp,
                             color = if (foundUser != null) Color.Green else Color.Red,
@@ -127,7 +137,7 @@ fun ConversationListScreen(navController: NavController) { // 定义会话列表
                         )
                     }
                     if (foundUser != null) {
-                        androidx.compose.material3.Text(
+                        Text(
                             text = "找到用户：${foundUser!!.username}",
                             fontSize = 14.sp,
                             modifier = Modifier.padding(top = 8.dp)
@@ -148,10 +158,13 @@ fun ConversationListScreen(navController: NavController) { // 定义会话列表
                                     isSearching = false
                                     if (success) {
                                         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                                        showSearchDialog = false
-                                        searchInput = ""
-                                        searchStatus = ""
-                                        foundUser = null
+                                        @Suppress("UNUSED_VALUE") // 重置状态仅用于关闭弹窗
+                                        run {
+                                            showSearchDialog = false
+                                            searchInput = ""
+                                            searchStatus = ""
+                                            foundUser = null
+                                        }
                                     } else {
                                         searchStatus = message
                                     }
@@ -175,11 +188,14 @@ fun ConversationListScreen(navController: NavController) { // 定义会话列表
             dismissButton = {
                 TextButton(
                     onClick = {
-                        showSearchDialog = false
-                        searchInput = ""
-                        searchStatus = ""
-                        foundUser = null
-                        isSearching = false
+                        @Suppress("UNUSED_VALUE") // 重置状态仅用于关闭弹窗
+                        run {
+                            showSearchDialog = false
+                            searchInput = ""
+                            searchStatus = ""
+                            foundUser = null
+                            isSearching = false
+                        }
                     }
                 ) {
                     Text("取消")
@@ -196,11 +212,29 @@ fun ConversationListScreen(navController: NavController) { // 定义会话列表
                     containerColor = MaterialTheme.colorScheme.primary // 设置背景颜色为深蓝色
                 ),
                 actions = { // 定义右侧的操作按钮
-                    IconButton(onClick = {
-                        // 打开搜索添加好友对话框
-                        showSearchDialog = true
-                    }) {
-                        Icon(Icons.Default.Add, contentDescription = "添加好友")
+                    Box { // 使用 Box 包裹更多按钮与菜单
+                        IconButton(onClick = { showMenuDropdown = true }) { // 点击更多按钮展开菜单
+                            Icon(Icons.Default.MoreVert, contentDescription = "更多选项") // 显示三个点图标
+                        }
+                        DropdownMenu( // 下拉菜单
+                            expanded = showMenuDropdown, // 控制菜单展开/收起
+                            onDismissRequest = { showMenuDropdown = false } // 点击外部或返回键时关闭
+                        ) {
+                            DropdownMenuItem( // 菜单项：创建群聊
+                                text = { Text("创建群聊") }, // 文本：创建群聊
+                                onClick = { // 点击回调
+                                    showMenuDropdown = false // 先关闭菜单
+                                    navController.navigate("create_group_chat") // 导航到创建群聊页面
+                                }
+                            )
+                            DropdownMenuItem( // 菜单项：添加好友
+                                text = { Text("添加好友") }, // 文本：添加好友
+                                onClick = { // 点击回调
+                                    showMenuDropdown = false // 先关闭菜单
+                                    showSearchDialog = true // 打开原有添加好友对话框
+                                }
+                            )
+                        }
                     }
                 }
             )
@@ -213,15 +247,27 @@ fun ConversationListScreen(navController: NavController) { // 定义会话列表
         ) {
             items(
                 items = sortedConversations,
-                key = { it.otherUserUid.ifBlank { it.name } }
+                key = { conversation ->
+                    // ✅ 使用相同的 key 策略：群聊用 "group_${chatId}"，私聊用 "private_${otherUserUid}"
+                    if (conversation.chatType == "group") {
+                        "group_${conversation.chatId}"
+                    } else {
+                        "private_${conversation.otherUserUid}"
+                    }
+                }
             ) { conversation ->
                 ConversationListItem(
                     conversation = conversation,
                     onClick = {
-                        if (conversation.otherUserUid.isNotBlank()) {
+                        // 判断聊天类型进行不同的导航
+                        if (conversation.chatType == "group") { // 如果是群聊
+                            // 群聊使用 chatId 导航
+                            navController.navigate("conversation_detail/${conversation.chatId}")
+                        } else if (conversation.otherUserUid.isNotBlank()) { // 如果是一对一聊天
+                            // 一对一使用 otherUserUid 导航
                             navController.navigate("conversation_detail/${conversation.otherUserUid}")
-                        } else {
-                            Toast.makeText(context, "当前会话缺少用户标识，暂时无法进入", Toast.LENGTH_SHORT).show()
+                        } else { // 都不符合，显示错误提示
+                            Toast.makeText(context, "当前会话缺少标识，暂时无法进入", Toast.LENGTH_SHORT).show()
                         }
                     }
                 )
@@ -351,6 +397,14 @@ fun ConversationListItem( // 定义单个会话列表项的 UI
                             fontWeight = FontWeight.Bold, // 字体加粗
                             fontSize = 16.sp // 字体大小 16sp
                         )
+                        // ✅ 添加日志：显示列表中每个会话的关键信息
+                        LaunchedEffect(conversation.name) {
+                            val typeStr = if (conversation.chatType == "group") "群聊" else "私聊"
+                            android.util.Log.d(
+                                "ConversationListScreen",
+                                "$typeStr [${conversation.name}]: chatId=${conversation.chatId}, otherUserUid=${conversation.otherUserUid}"
+                            )
+                        }
                         if (conversation.isPinned) { // 如果会话已置顶
                             Spacer(modifier = Modifier.width(6.dp)) // 添加间隔
                             Icon( // 显示置顶图标

@@ -18,6 +18,7 @@ import androidx.navigation.compose.composable // 导入导航路由定义函数
 import androidx.navigation.compose.rememberNavController // 导入导航控制器记录函数
 import androidx.navigation.navArgument // 导入导航参数定义函数
 import com.example.screenshotoftaskmanager.ui.ConversationDetailScreen // 导入聊天详情页
+import com.example.screenshotoftaskmanager.ui.CreateGroupChatScreen // 导入创建群聊页
 import com.example.screenshotoftaskmanager.ui.LoginScreen // 导入登录页
 import com.example.screenshotoftaskmanager.ui.MainScreen // 导入主屏幕
 import com.example.screenshotoftaskmanager.ui.OnboardingScreen // 导入引导页
@@ -81,6 +82,9 @@ fun TaskManagerApp() { // 应用主导航函数
         ) { backStackEntry ->
             val otherUserUid = backStackEntry.arguments?.getString("otherUserUid") ?: ""
             ConversationDetailScreen(navController = navController, otherUserUid = otherUserUid)
+        }
+        composable("create_group_chat") { // 创建群聊页面路由
+            CreateGroupChatScreen(navController = navController) // 导航到创建群聊页
         }
     }
 }
