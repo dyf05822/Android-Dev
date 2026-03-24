@@ -3,34 +3,35 @@ package com.example.screenshotoftaskmanager // 声明包名，确保文件属于
 import com.google.firebase.auth.FirebaseAuth // 导入 Firebase 身份验证库，用于用户注册和登录功能
 import com.google.firebase.firestore.FirebaseFirestore // 导入 Firestore 数据库库，用于存储聊天数据和用户信息
 
-// 创建一个单例对象，全局只有一个 AuthManager 实例，用于管理所有身份验证操作
-object AuthManager {
+// 创建一个单例对象，全局只有一个 AuthManager 实例，用于管理所有身份验证操作  授权管理器
+object AuthManager {       //为什么用object？全局唯一 不用反复new 所有页面共享登陆状态
 
     // 初始化 FirebaseAuth 实例，用于处理用户身份验证相关的操作
-    private val auth = FirebaseAuth.getInstance()
+    private val auth = FirebaseAuth.getInstance()    //获取实例
     
     // 初始化 Firestore 实例，用于存储和读取聊天、用户信息等数据
-    private val db = FirebaseFirestore.getInstance()
+    private val db = FirebaseFirestore.getInstance()   //db:数据库
 
     // 将用户输入的账号转换为邮箱格式，方便 Firebase 认证（Firebase 使用邮箱作为标识符）
     private fun convertUsernameToEmail(username: String): String {
         // 先去掉账号首尾的空格，避免用户误输入空格导致登录失败
-        val normalizedUsername = username.trim()
+        val normalizedUsername = username.trim()    //trim 修剪字符串首尾空格
+
         // 将账号转换为 username@chatapp.com 的邮箱格式
-        return "$normalizedUsername@chatapp.com"
+        return "$normalizedUsername@chatapp.com"   //转换格式
     }
 
     // 注册函数：接收账号、密码和回调函数，用于创建新用户账户
-    fun register(username: String, password: String, callback: (Boolean, String) -> Unit) {
+    fun register(username: String, password: String, callback: (Boolean, String) -> Unit) {  //unit表示这个函数没有返回值，注册完成后调用这个函数告诉你结果
         // 先规范化账号文本，避免把首尾空格一起提交给 Firebase
         val normalizedUsername = username.trim()
         // 将用户输入的账号转换为邮箱格式
         val email = convertUsernameToEmail(normalizedUsername)
         
         // 调用 Firebase 的用户创建方法，异步创建新账户
-        auth.createUserWithEmailAndPassword(email, password)
+        auth.createUserWithEmailAndPassword(email, password)   //这个是firebase sdk已经定义好的方法
             // 添加监听器，当操作完成时执行此代码块
-            .addOnCompleteListener { task ->
+            .addOnCompleteListener { task ->   //箭头指向注册任务的执行结果
                 // 判断操作是否成功
                 if (task.isSuccessful) {
                     // 注册成功后，立即把用户资料写入 Firestore，确保后续能通过 username 找到 uid
@@ -75,7 +76,7 @@ object AuthManager {
                 } else {
                     // 如果登录失败，调用回调函数返回 false 和错误信息
                     // 如果异常信息为空，则显示通用错误消息
-                    callback(false, task.exception?.message ?: "登录失败 ❌ 账号或密码错误")
+                    callback(false, task.exception?.message ?: "登录失败 ❌ 账号或密码错误")   //安全调用操作符
                 }
             }
     }
@@ -83,7 +84,7 @@ object AuthManager {
     // 获取当前登录用户的邮箱地址，如果没有登录则返回空字符串
     fun getCurrentUserEmail(): String {
         // 获取当前认证的用户，如果为空返回 null
-        return auth.currentUser?.email ?: ""
+        return auth.currentUser?.email ?: ""     //currentUser 是 FirebaseAuth 提供的属性，表示当前登录的用户，如果没有用户登录则为 null；安全调用操作符（?.）用于避免空指针异常，如果 currentUser 为 null 则直接返回空字符串
     }
 
     // 检查用户是否已经登录
@@ -144,7 +145,7 @@ object AuthManager {
             return
         }
 
-        // 创建用户信息对象，用于存储到 Firestore
+        // 创建用户信息对象，用于存储到 Firestore 注意这里uid是用在firestore中 为了存储聊天内容而读取的
         val user = User(
             uid = uid, // 用户的唯一标识符
             username = username, // 用户输入的账号
@@ -154,9 +155,9 @@ object AuthManager {
         // 将用户信息写入 Firestore 的 users 集合中
         // 路径：users/{uid}
         db.collection("users") // 访问 users 集合
-            .document(uid) // 使用用户 UID 作为文档 ID
-            .set(user) // 保存用户信息
-            .addOnSuccessListener { // 成功时执行
+            .document(uid) // 用当前用户 UID 作为文档 ID
+            .set(user) // 保存用户信息  注意这个是异步操作 不阻塞线程
+            .addOnSuccessListener { // 监听：成功时执行
                 onComplete(true) // 调用回调函数，返回成功
             }
             .addOnFailureListener { // 失败时执行

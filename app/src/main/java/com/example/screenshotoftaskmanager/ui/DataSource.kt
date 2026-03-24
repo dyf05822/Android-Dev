@@ -123,6 +123,7 @@ object DataSource { // 全局单例数据源
             android.util.Log.d("DataSource", "合并会话 $logTag: key=$conversationKey, 是否已存在=${existingConversation != null}")
 
             if (existingConversation != null) {
+                // 仅保留“本地交互态”，云端字段（如 lastMessage/lastTimestamp）以 incoming 为准
                 incomingConversation.isPinned = existingConversation.isPinned
                 incomingConversation.unreadCount = existingConversation.unreadCount
                 incomingConversation.draft = existingConversation.draft
@@ -158,6 +159,7 @@ object DataSource { // 全局单例数据源
         
         // ✅ 群聊 chatId 走群聊占位，避免误创建为私聊并污染列表
         if (otherUserUid.startsWith("group_")) {
+            // 传入的是群聊 chatId 时，必须创建群聊占位，避免误落到私聊 key 体系
             val safeGroupName = displayName.takeIf { it.isNotBlank() && !it.startsWith("group_") } ?: "群聊"
             android.util.Log.w("DataSource", "⚠️ 未找到群聊，创建占位群聊：groupName=$safeGroupName, chatId=$otherUserUid")
             return Conversation(
@@ -194,7 +196,7 @@ object DataSource { // 全局单例数据源
     fun getMessagesForConversation(newFriendName: String) { // 兼容旧调用，当前已切换为云端会话，不再在本地创建固定聊天
     }
 
-    // 聊天内容中可选的图片库（用于发送图片消息，保持 photo1-5 不变）
+    // 聊天内容中可选的图片库（用于发送图片消息，保持 photo1-5 不变）  当时目前还无法在不同设备上显示 等待数据库开通
     val drawableResources = listOf(R.drawable.photo1, R.drawable.photo2, R.drawable.photo3, R.drawable.photo4, R.drawable.photo5)
 
 }

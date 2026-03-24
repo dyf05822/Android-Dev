@@ -103,7 +103,7 @@ fun ProfileScreen(mainNavController: NavController) { // “我的”屏幕组�
 
     // ✅ 头像更换弹窗逻辑
     if (showDialog) { // 如果需要显示弹窗
-        AlertDialog(
+        AlertDialog(          //弹出对话框
             onDismissRequest = { showDialog = false }, // 点击外部关闭弹窗
             title = { Text("更换头像") }, // 弹窗标题
             text = { Text("请选择头像来源：") }, // 弹窗内容说明

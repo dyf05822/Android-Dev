@@ -20,7 +20,7 @@ data class LiveWeather(          //表示一条天气信息
 
 // ✅ 新增：定义逆地理编码（经纬度转城市码）的数据结构
 // 对应高德 API 的 JSON 层级结构
-data class GeocodeResponse(       //
+data class GeocodeResponse(       //地理编码响应
     val regeocode: RegeocodeData? // 返回的地理反查信息
 )
 

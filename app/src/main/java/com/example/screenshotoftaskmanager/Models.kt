@@ -7,7 +7,7 @@ import com.google.firebase.firestore.PropertyName // 导入Firestore属性注解
  * Chat 数据类：表示聊天会话（支持一对一和群聊）
  * 这个类用于存储在 Firestore 的 chats 集合中
  * 结构：chats/{chatId}
- */
+ */ // 是整个聊天系统的数据模型中心
 data class Chat(
     // 聊天会话的唯一标识符（一对一时由两个 UID 生成，群聊时为 UUID）
     var chatId: String = "",
@@ -26,7 +26,7 @@ data class Chat(
     
     // 参与这个聊天的用户 UID 列表（一对一时包含 2 个用户，群聊时可以是多个）
     @PropertyName("participants")
-    var participants: List<String> = emptyList(),
+    var participants: List<String> = emptyList(),        //emptylist默认是空列表 表示暂时没有参与者
 
     // 群聊的创建者/群主 UID（一对一时为空）
     @PropertyName("owner")
@@ -101,7 +101,7 @@ object ChatUtils {
      * getChatId("userB", "userA") // 也返回 "userA_userB"（一样的结果，确保唯一性）
      */
     fun getChatId(uid1: String, uid2: String): String {
-        // 比较两个 UID 的字符顺序，确保较小的 UID 总是放在前面
+        // 比较两个 UID 的字符顺序，确保较小的 UID 总是放在前面  较小的uid在前面
         return if (uid1 < uid2) {
             // 如果 uid1 < uid2，按这个顺序连接
             "${uid1}_${uid2}"

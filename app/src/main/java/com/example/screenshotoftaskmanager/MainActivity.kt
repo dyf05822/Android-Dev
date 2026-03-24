@@ -1,5 +1,7 @@
 package com.example.screenshotoftaskmanager // 包名声明
 
+//于3.23温习
+
 import android.os.Bundle // 导入 Bundle 类，用于处理 Activity 状态就是装数据的小容器 可以用来保存/恢复状态 “包”
 import androidx.activity.ComponentActivity // 导入基础 Activity 类   “支持生命周期、SavedState、Activity Result 等现代组件。”
 import androidx.activity.compose.setContent // 导入 Compose 内容设置函数Compose 的关键入口：把“Compose UI 树”放进 Activity 的窗口里。
@@ -28,60 +30,60 @@ import com.google.firebase.FirebaseApp // 导入FirebaseApp用于初始化Fireba
 import kotlinx.coroutines.delay // 导入延迟函数
 import kotlinx.coroutines.launch// 导入协程开启函数 启动一个协程 异步任务：任务在后台执行不阻塞当前程序
 
-class MainActivity : ComponentActivity() { // MainActivity 类定义
+class MainActivity : ComponentActivity() { // MainActivity 类定义 继承自 ComponentActivity 类
 
-    // 定义一个变量，用于控制启动页是否应该继续显示在屏幕上（默认初始为 true）
+    // 定义一个变量，用于控制启动页是否应该继续显示在屏幕上（默认初始为 true）  就是个开关
     private var keepSplashScreen = true
 
-    override fun onCreate(savedInstanceState: Bundle?) { // onCreate 生命周期方法
-        val splashScreen = installSplashScreen() // 调用官方 splash api，系统启动时先显示启动页
-        splashScreen.setKeepOnScreenCondition { keepSplashScreen } // 只要 keepSplashScreen 是 true，启动页就不消失
+    override fun onCreate(savedInstanceState: Bundle?) { // onCreate 生命周期方法  oncreate是应用启动时最先执行的地方
+        val splashScreen = installSplashScreen() // 调用官方 splash api，安装官方启动页 系统启动时先显示启动页  采用系统级的启动页方案，兼容性和启动体验更好。
+        splashScreen.setKeepOnScreenCondition { keepSplashScreen } // 只要 keepSplashScreen 是 true，启动页就不消失，设置什么时候消失
 
-        lifecycleScope.launch {
+        lifecycleScope.launch {   //在当前生命周期启动一个协程  避免内存泄漏
             delay(3400) // 强制让启动页在此停留 3400 毫秒 (3.4 秒)
             keepSplashScreen = false // 时间到后平滑消失，进入欢迎页
         }
 
-        super.onCreate(savedInstanceState) // 调用父类初始化
+        super.onCreate(savedInstanceState) // 调用父类初始化，先让父类完成activity的基本设置
 
         FirebaseApp.initializeApp(this) // 初始化 Firebase 服务
         enableEdgeToEdge() // 开启全屏边缘到边缘的沉浸式体验
 
-        setContent {
+        setContent {   //把ui放到屏幕上  不再使用 XML 布局（长什么样。怎么排版），而是直接用 Compose 代码构建整个界面。
             ScreenshotofTaskManagerTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                Surface(    //页面底板容器
+                    modifier = Modifier.fillMaxSize(),  //占满父容器可用空间
+                    color = MaterialTheme.colorScheme.background   //背景色使用当前主题的背景色
                 ) {
-                    TaskManagerApp() // 加载主导航应用
+                    TaskManagerApp() // 加载主导航应用 真正的主界面入口
                 }
             }
         }
     }
 }
 
-@Composable
+@Composable   //compose可组合函数
 fun TaskManagerApp() { // 应用主导航函数
     val navController = rememberNavController() // 创建导航控制器
-    NavHost(navController = navController, startDestination = "onboarding") {
+    NavHost(navController = navController, startDestination = "onboarding") {  //navhost 导航容器  启动后默认进入onbording
         composable("onboarding") {
             OnboardingScreen(navController = navController)
         }
         composable("login") {
-            LoginScreen(navController = navController)
+            LoginScreen(navController = navController)   //登录页路由
         }
         composable("register") {
-            RegisterScreen(navController = navController)
+            RegisterScreen(navController = navController)   //注册页路由
         }
-        composable("conversation_list") {
+        composable("conversation_list") {     //聊天列表主页面
             MainScreen(mainNavController = navController)
         }
-        composable(
-            route = "conversation_detail/{otherUserUid}", // 聊天详情路由参数改为对方 UID，方便从云端唯一定位会话
-            arguments = listOf(navArgument("otherUserUid") { type = NavType.StringType })
-        ) { backStackEntry ->
-            val otherUserUid = backStackEntry.arguments?.getString("otherUserUid") ?: ""
-            ConversationDetailScreen(navController = navController, otherUserUid = otherUserUid)
+        composable(    //带参数的聊天详情页
+            route = "conversation_detail/{otherUserUid}", // 聊天详情路由参数otheruseruid改为对方 UID，方便从云端唯一定位会话
+            arguments = listOf(navArgument("otherUserUid") { type = NavType.StringType })  //表明这个参数是字符串类型
+        ) { backStackEntry ->         //backStackEntry 就是“当前路由实例 + 它携带的参数和状态”
+            val otherUserUid = backStackEntry.arguments?.getString("otherUserUid") ?: ""  //注意这个空安全
+            ConversationDetailScreen(navController = navController, otherUserUid = otherUserUid)   //聊天详情页就指导和哪个用户的会话
         }
         composable("create_group_chat") { // 创建群聊页面路由
             CreateGroupChatScreen(navController = navController) // 导航到创建群聊页

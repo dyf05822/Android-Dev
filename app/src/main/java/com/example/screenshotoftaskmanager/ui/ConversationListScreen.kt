@@ -85,8 +85,9 @@ fun ConversationListScreen(navController: NavController) { // 定义会话列表
     // 下拉菜单显示状态
     var showMenuDropdown by remember { mutableStateOf(false) } // true 表示展开菜单
 
-    DisposableEffect(Unit) {
-        val registration = CloudChatManager.listenMyConversations(
+    DisposableEffect(Unit) {     //一次性作用
+        // 页面进入即订阅会话流；离开页面时注销监听，避免重复监听和内存泄漏
+        val registration = CloudChatManager.listenMyConversations(        //这里进入监听，这里为什么监听呢，在消息列表的时候就要开始状态的更新了，万一收到了他人发的消息就可以更新了
             onChange = { cloudConversations ->
                 DataSource.replaceConversations(cloudConversations)
             },
@@ -95,110 +96,110 @@ fun ConversationListScreen(navController: NavController) { // 定义会话列表
             }
         )
 
-        onDispose {
-            registration?.remove()
+        onDispose {       //离开导航/界面销毁注销监听
+            registration?.remove() // 注销 Firestore 监听注册器，防止页面离开后继续回调
         }
     }
 
-    val sortedConversations: List<Conversation> = DataSource.conversations.sortedWith(
-        compareByDescending<Conversation> { it.isPinned }
-            .thenByDescending { it.lastTimestamp }
+    val sortedConversations: List<Conversation> = DataSource.conversations.sortedWith( // 对会话列表做二级排序：先置顶、后时间
+        compareByDescending<Conversation> { it.isPinned } // 置顶会话排在前面
+            .thenByDescending { it.lastTimestamp } // 同为置顶/非置顶时，最新消息时间靠前
     )
 
     // 搜索并添加好友的对话框
-    if (showSearchDialog) {
-        AlertDialog(
-            onDismissRequest = {
+    if (showSearchDialog) { // 当状态为 true 时展示搜索弹窗
+        AlertDialog( // Material3 对话框容器
+            onDismissRequest = { // 点击弹窗外部或返回键时触发
                 @Suppress("UNUSED_VALUE") // 重置状态值仅用于副作用，忽略“未读取”警告
                 run {
-                    showSearchDialog = false
-                    searchInput = ""
-                    searchStatus = ""
-                    foundUser = null
-                    isSearching = false
+                    showSearchDialog = false // 关闭弹窗
+                    searchInput = "" // 清空输入框
+                    searchStatus = "" // 清空状态提示文本
+                    foundUser = null // 清空搜索结果
+                    isSearching = false // 重置搜索中状态
                 }
             },
-            title = { Text("添加好友") },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = searchInput,
-                        onValueChange = { searchInput = it },
-                        label = { Text("输入好友ID") },
-                        enabled = !isSearching,
-                        modifier = Modifier.fillMaxWidth()
+            title = { Text("添加好友") }, // 弹窗标题
+            text = { // 弹窗正文区域
+                Column { // 垂直排列输入框、状态、结果
+                    OutlinedTextField( // 输入好友 ID 的文本框
+                        value = searchInput, // 绑定输入内容
+                        onValueChange = { searchInput = it }, // 输入变化时同步更新状态
+                        label = { Text("输入好友ID") }, // 输入框标签
+                        enabled = !isSearching, // 搜索中禁用输入，避免重复请求
+                        modifier = Modifier.fillMaxWidth() // 输入框宽度铺满
                     )
-                    if (searchStatus.isNotEmpty()) {
+                    if (searchStatus.isNotEmpty()) { // 有状态文案时显示（如未找到/成功提示）
                         Text(
-                            text = searchStatus,
-                            fontSize = 12.sp,
-                            color = if (foundUser != null) Color.Green else Color.Red,
-                            modifier = Modifier.padding(top = 8.dp)
+                            text = searchStatus, // 显示当前状态
+                            fontSize = 12.sp, // 状态文本字号
+                            color = if (foundUser != null) Color.Green else Color.Red, // 找到用户显示绿色，否则红色
+                            modifier = Modifier.padding(top = 8.dp) // 与输入框留出上间距
                         )
                     }
-                    if (foundUser != null) {
+                    if (foundUser != null) { // 搜索到用户时显示用户信息
                         Text(
-                            text = "找到用户：${foundUser!!.username}",
-                            fontSize = 14.sp,
-                            modifier = Modifier.padding(top = 8.dp)
+                            text = "找到用户：${foundUser!!.username}", // 展示匹配到的用户名
+                            fontSize = 14.sp, // 用户信息字号稍大
+                            modifier = Modifier.padding(top = 8.dp) // 与上方状态文案留间距
                         )
                     }
                 }
             },
-            confirmButton = {
+            confirmButton = { // 右下角主操作按钮（搜索/添加）
                 TextButton(
-                    onClick = {
-                        if (foundUser != null) {
+                    onClick = { // 点击确认按钮时执行
+                        if (foundUser != null) { // 已有搜索结果：执行添加好友/创建会话
                             // 添加好友
-                            isSearching = true
-                            CloudChatManager.createOrUpdateConversation(
-                                otherUserUid = foundUser!!.uid,
-                                otherUsername = foundUser!!.username,
-                                onComplete = { success, message ->
-                                    isSearching = false
-                                    if (success) {
-                                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                            isSearching = true // 进入处理中状态，防止重复点击
+                            CloudChatManager.createOrUpdateConversation( // 创建或更新与该用户的一对一会话
+                                otherUserUid = foundUser!!.uid, // 目标用户 UID
+                                otherUsername = foundUser!!.username, // 目标用户名（用于本地展示回退）
+                                onComplete = { success, message -> // 云端操作完成回调
+                                    isSearching = false // 结束处理中状态
+                                    if (success) { // 添加成功分支
+                                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show() // 弹成功提示
                                         @Suppress("UNUSED_VALUE") // 重置状态仅用于关闭弹窗
                                         run {
-                                            showSearchDialog = false
-                                            searchInput = ""
-                                            searchStatus = ""
-                                            foundUser = null
+                                            showSearchDialog = false // 关闭弹窗
+                                            searchInput = "" // 清空输入
+                                            searchStatus = "" // 清空状态提示
+                                            foundUser = null // 清空已找到用户
                                         }
                                     } else {
-                                        searchStatus = message
+                                        searchStatus = message // 失败时在弹窗内显示错误原因
                                     }
                                 }
                             )
-                        } else {
+                        } else { // 还未搜索到用户：先执行搜索
                             // 执行搜索
-                            isSearching = true
-                            CloudChatManager.searchUser(searchInput) { user, message ->
-                                isSearching = false
-                                foundUser = user
-                                searchStatus = message
+                            isSearching = true // 标记为搜索中，禁用输入和按钮
+                            CloudChatManager.searchUser(searchInput) { user, message -> // 根据输入 ID 查询用户
+                                isSearching = false // 搜索结束
+                                foundUser = user // 记录查询结果（可能为 null）
+                                searchStatus = message // 显示查询结果提示文案
                             }
                         }
                     },
-                    enabled = !isSearching
+                    enabled = !isSearching // 搜索/添加过程中禁用按钮
                 ) {
-                    Text(if (foundUser != null) "添加好友" else "搜索")
+                    Text(if (foundUser != null) "添加好友" else "搜索") // 根据状态动态切换按钮文案
                 }
             },
-            dismissButton = {
+            dismissButton = { // 左下角取消按钮
                 TextButton(
-                    onClick = {
+                    onClick = { // 点击取消后清空状态并关闭弹窗
                         @Suppress("UNUSED_VALUE") // 重置状态仅用于关闭弹窗
                         run {
-                            showSearchDialog = false
-                            searchInput = ""
-                            searchStatus = ""
-                            foundUser = null
-                            isSearching = false
+                            showSearchDialog = false // 关闭弹窗
+                            searchInput = "" // 清空输入
+                            searchStatus = "" // 清空提示文案
+                            foundUser = null // 清空搜索结果
+                            isSearching = false // 重置处理中状态
                         }
                     }
                 ) {
-                    Text("取消")
+                    Text("取消") // 取消按钮文案
                 }
             }
         )
@@ -249,6 +250,7 @@ fun ConversationListScreen(navController: NavController) { // 定义会话列表
                 items = sortedConversations,
                 key = { conversation ->
                     // ✅ 使用相同的 key 策略：群聊用 "group_${chatId}"，私聊用 "private_${otherUserUid}"
+                    // key 必须稳定且唯一，避免 LazyColumn 因重复 key 触发崩溃
                     if (conversation.chatType == "group") {
                         "group_${conversation.chatId}"
                     } else {
@@ -259,6 +261,7 @@ fun ConversationListScreen(navController: NavController) { // 定义会话列表
                 ConversationListItem(
                     conversation = conversation,
                     onClick = {
+                        // 导航入参与会话类型绑定：群聊传 chatId，私聊传 otherUserUid
                         // 判断聊天类型进行不同的导航
                         if (conversation.chatType == "group") { // 如果是群聊
                             // 群聊使用 chatId 导航

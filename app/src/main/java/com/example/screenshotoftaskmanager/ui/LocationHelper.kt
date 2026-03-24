@@ -14,13 +14,13 @@ import kotlinx.coroutines.withTimeoutOrNull // 导入超时处理
 import kotlin.coroutines.resume // ✅ 核心导入：用于手动恢复协程执行
 
 // ✅ 全能型定位辅助：针对无 Google 框架、老旧国产手机进行了极致适配
-object LocationHelper {     //声明是一个单例工具类
+object LocationHelper {     //声明是一个”单例“工具类
 
     /**
      * ✅ 获取当前位置：采用四重保险策略
      */
-    @SuppressLint("MissingPermission") // 权限已在 UI 层申请，此处假设已有权限
-    suspend fun getCurrentLocation(context: Context): Location? {   //协程函数
+    @SuppressLint("MissingPermission") // 权限已在 UI 层申请，此处假设已有权限  suppresslint抑制代码检查警告 忽略缺少权限的检查
+    suspend fun getCurrentLocation(context: Context): Location? {   //协程函数挂起
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)   //融合定位客户端 谷歌定位
         val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager     //位置管理器    安卓原生定位 两个定位系统
 
@@ -45,7 +45,8 @@ object LocationHelper {     //声明是一个单例工具类
         val lastSystemLoc = try {
             val provider = if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) 
                 LocationManager.NETWORK_PROVIDER else LocationManager.GPS_PROVIDER
-            locationManager.getLastKnownLocation(provider)     //provider有两个一个是网络pro另一个是GPSpro
+            locationManager.getLastKnownLocation(provider)     //provider
+        // 有两个一个是网络pro另一个是GPSpro
         } catch (e: Exception) { null }
         if (lastSystemLoc != null) return lastSystemLoc
 
@@ -68,7 +69,7 @@ object LocationHelper {     //声明是一个单例工具类
                     override fun onProviderDisabled(p: String) {}
                 }
                 
-                try {     //准备开始正是请求系统定位
+                try {     //准备开始正式请求系统定位
                     // 3. 决定定位来源：优先网络定位（室内快），其次 GPS
                     val provider = if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER))    //先检查网络是否可以用如果可以就用network 定位
                         LocationManager.NETWORK_PROVIDER else LocationManager.GPS_PROVIDER
@@ -81,7 +82,7 @@ object LocationHelper {     //声明是一个单例工具类
                 }
                 
                 // 5. 如果 5 秒内没搜到，协程会被取消，此时必须移除监听器，防止内存泄漏
-                continuation.invokeOnCancellation {   //调用取消协程
+                continuation.invokeOnCancellation {   //在取消时调用取消协程
                     locationManager.removeUpdates(listener)   //同时移除定位监听器
                 }
             }

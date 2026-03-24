@@ -107,7 +107,7 @@ fun RegisterScreen(navController: NavController) { // 定义注册屏幕函数�
                             }
                         }
                         
-                        // 调用 AuthManager 的 register 函数进行 Firebase 注册
+                        // 调用 AuthManager 的 register 函数进行 Firebase 注册   很重要！！
                         AuthManager.register(username, password) registerCallback@ { success, message ->
                             if (registerRequestId != currentRequestId) { // 如果这已经不是当前最新的一次注册请求，就直接忽略旧回调
                                 return@registerCallback // 防止超时后的旧回调再次改动界面状态

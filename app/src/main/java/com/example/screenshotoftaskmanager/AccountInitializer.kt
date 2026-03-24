@@ -21,18 +21,18 @@ object AccountInitializer {
 
     // 使用只读属性动态获取 Firestore，避免持有静态 Context 引用
     private val db: FirebaseFirestore
-        get() = FirebaseFirestore.getInstance()
+        get() = FirebaseFirestore.getInstance()    //这里get是只读属性每次访问时动态拿实例笔名啊不必要的静态使用
 
-    // 二级 FirebaseApp 的名称，用于隔离创建账号流程，避免挤掉当前 admin 登录态
-    private const val SECONDARY_APP_NAME = "account_initializer_secondary"
+    // 二级 FirebaseApp 的名称，用于隔离创建账号流程，避免挤掉当前 admin 登录态  注意这里很重要！！！！
+    private const val SECONDARY_APP_NAME = "account_initializer_secondary"  //二级 FirebaseApp 的名字
 
     // 认证请求超时时间（毫秒）
-    private const val AUTH_TIMEOUT_MS = 20000L
+    private const val AUTH_TIMEOUT_MS = 20000L   //人话：20秒
     
-    // 定义系统账号的信息（账号、密码、显示名称）
+    // 定义系统账号的信息（账号、密码、显示名称） 初始化脚本的数据源
     private val systemAccounts = listOf(
         // 系统账号1：小明
-        mapOf(
+        mapOf(                                 //mapof是创建只读键值对集合的函数
             "username" to "xiaoming", // 账号
             "password" to "123456", // 密码
             "displayName" to "小明" // 显示名称
@@ -55,7 +55,7 @@ object AccountInitializer {
      * 管理员一键初始化入口：创建系统账号 + 初始化聊天数据
      * 只允许当前登录账号为 admin 时执行
      */
-    fun bootstrapSystemDataForAdmin(
+    fun bootstrapSystemDataForAdmin(        //为管理员加载系统数据的入口函数
         onProgress: (String) -> Unit = { _ -> }, // 进度文本回调
         onComplete: (Boolean, String) -> Unit // 完成回调（成功标记 + 文本）
     ) {
@@ -82,10 +82,10 @@ object AccountInitializer {
 
         // 先创建系统账号
         createSystemAccounts(
-            onProgress = { message, _, progress ->
+            onProgress = { message, _, progress ->    //过程回调  可能会被调用很多次
                 onProgress("[账号初始化 $progress] $message") // 透传并补充阶段信息
             },
-            onComplete = { accountPhaseSuccess ->
+            onComplete = { accountPhaseSuccess ->    //账户阶段成功   结果回调 只调用一次
                 // 再初始化聊天记录
                 initializeChatMessages(
                     adminUid = adminUid,
@@ -95,7 +95,7 @@ object AccountInitializer {
                     onComplete = { chatPhaseSuccess, finalMessage ->
                         // 两个阶段都成功才算整体成功
                         val finalSuccess = accountPhaseSuccess && chatPhaseSuccess
-                        onComplete(finalSuccess, finalMessage)
+                        onComplete(finalSuccess, finalMessage)   //结果回调
                     }
                 )
             }
@@ -126,7 +126,7 @@ object AccountInitializer {
     /**
      * 为“已存在账号”补写 users/{uid} 文档，避免后续无法根据 username 找到 UID
      */
-    private fun ensureExistingAccountUserDocument(
+    private fun ensureExistingAccountUserDocument(   //补写已存在账号的 users 文档
         secondaryAuth: FirebaseAuth, // 二级认证实例
         username: String, // 账号
         password: String, // 密码
@@ -135,10 +135,10 @@ object AccountInitializer {
         // 拼接 Firebase Auth 需要的邮箱格式
         val email = "${username}@chatapp.com"
 
-        // 先退出二级认证当前账号，避免残留登录态影响本次补写流程
+        // 先退出二级认证当前账号，避免残留登录态影响本次补写流程 避免上一次残留的登录态污染本次流程
         secondaryAuth.signOut()
 
-        // 创建一个原子标记，保证登录成功/失败/超时只会处理一次
+        // 创建一个原子标记，保证登录成功/失败/超时只会处理一次   否则可能被回调两次
         val callbackHandled = AtomicBoolean(false)
 
         // 创建一个主线程 Handler，用于启动超时计时器
@@ -148,7 +148,7 @@ object AccountInitializer {
         val timeoutRunnable = Runnable {
             // 只有第一次进入时才真正执行超时逻辑
             if (callbackHandled.compareAndSet(false, true)) {
-                // 打印更明确的超时日志，方便在 Logcat 中定位问题
+                // 打印更明确的超时日志（log），方便在 Logcat 中定位问题
                 Log.e("AccountInitializer", "补写已存在账号资料超时: $username")
 
                 // 清理二级认证状态，避免后续流程被脏状态污染
@@ -160,7 +160,7 @@ object AccountInitializer {
         }
 
         // 启动超时计时器
-        timeoutHandler.postDelayed(timeoutRunnable, AUTH_TIMEOUT_MS)
+        timeoutHandler.postDelayed(timeoutRunnable, AUTH_TIMEOUT_MS)   //延迟执行
 
         // 用二级 Auth 登录这个已存在账号，以拿到 UID
         secondaryAuth.signInWithEmailAndPassword(email, password)
@@ -180,7 +180,7 @@ object AccountInitializer {
                 if (uid.isBlank()) {
                     secondaryAuth.signOut()
                     onComplete(false)
-                    return@addOnSuccessListener
+                    return@addOnSuccessListener    //带标签返回  跳出lambda
                 }
 
                 // 组装 users 文档
@@ -200,11 +200,11 @@ object AccountInitializer {
 
                         onComplete(true)
                     }
-                    .addOnFailureListener {
+                    .addOnFailureListener {    //添加失败监听器
                         // 补写失败后同样登出
                         secondaryAuth.signOut()
 
-                        onComplete(false)
+                        onComplete(false)   //完成事件 回调函数
                     }
             }
             .addOnFailureListener {
@@ -227,7 +227,7 @@ object AccountInitializer {
      * 创建系统账号
      * 这个方法会逐个创建这3个系统账号
      */
-    fun createSystemAccounts(
+    fun createSystemAccounts(     //创建系统账号
         onProgress: (String, Boolean, String) -> Unit, // 定义回调函数类型
         onComplete: (Boolean) -> Unit = { _ -> } // 阶段完成回调，true 表示本阶段整体成功
     ) {
@@ -259,7 +259,7 @@ object AccountInitializer {
     /**
      * 递归创建账号的私有方法
      */
-    private fun createAccountRecursively(
+    private fun createAccountRecursively(    //创建递归账户
         index: Int, // 当前处理的账号索引
         secondaryAuth: FirebaseAuth, // 二级认证实例（不会影响主登录态）
         hasFailure: Boolean, // 到当前为止是否出现过失败
@@ -313,7 +313,7 @@ object AccountInitializer {
                 // 更新界面进度，让用户知道不是程序死掉，而是认证请求超时
                 onProgress("❌ 创建超时：$displayName（请检查网络 / Firebase 连接）", false, "${index + 1}/${systemAccounts.size}")
 
-                // 继续处理下一个账号，避免整个初始化流程永远卡在第一个账号
+                // 继续处理下一个账号，避免整个初始化流程永远卡在第一个账号  执行下一个帐号了
                 createAccountRecursively(
                     index = index + 1,
                     secondaryAuth = secondaryAuth,
@@ -459,11 +459,11 @@ object AccountInitializer {
                 val userMap = mutableMapOf<String, String>() // 用来存储 username -> uid 的映射
 
                 // 遍历所有用户文档
-                for (doc in snapshot.documents) {
+                for (doc in snapshot.documents) {     //snapshot 是get（）成功返回的querysnapshot 这些是firebase sdk带的字段
                     // 从文档中提取user对象
                     val user = doc.toObject(User::class.java)
                     if (user != null) {
-                        // 将 username -> uid 存入map
+                        // 将 username -> uid 存入map   映射 （键值对集合）
                         userMap[user.username] = user.uid // 建立用户名和UID的对应关系
                     }
                 }
@@ -509,7 +509,7 @@ object AccountInitializer {
 
                     if (pendingCount == 0) {
                         val allSuccess = failureCount == 0
-                        val finalMessage = if (allSuccess) {
+                        val finalMessage = if (allSuccess) {   //全部成功
                             "✅ 聊天初始化完成（$successCount/3）"
                         } else {
                             "⚠️ 聊天初始化完成（成功$successCount，失败$failureCount）"
@@ -525,7 +525,7 @@ object AccountInitializer {
                         senderId = xiaomingUid, // 发送者是小明
                         receiverId = adminUid, // 接收者是admin
                         text = "明天干饭去", // 消息内容
-                        timestamp = baseTime - 300000, // 时间戳（5分钟前）
+                        timestamp = baseTime - 300000, // 时间戳（5分钟前） 好尼玛时间戳都是随便写的啊卧槽
                         type = "text" // 消息类型
                     ),
                     // 第二条消息：admin发送
